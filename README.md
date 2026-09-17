@@ -10,10 +10,10 @@ support required by the kernel before KrumpyOS can become bootable.
 
 ## Project status
 
-KrumpyOS is currently at the planning stage. There is not yet a kernel,
-bootloader, linker layout, or bootable image. The sibling K compiler can
-currently parse, type-check, and emit x86-64 System V assembly for a small
-low-level subset of K.
+KrumpyOS now has an experimental BIOS boot path. The first kernel payload is
+compiled from K, loaded by `kernel/boot.s`, and linked into a raw disk image.
+After entering x86-64 long mode it returns a K string to the boot entry, which
+writes the message to COM1. QEMU is the intended runner.
 
 ## Roadmap
 
@@ -66,15 +66,29 @@ or a host operating-system syscall interface.
 
 ### Phase 3: Boot the first KrumpyOS kernel
 
-- [ ] Add a boot entry point and linker script.
-- [ ] Initialize a known stack and transfer control to a K kernel entry point.
-- [ ] Build a bootable image from a clean checkout.
-- [ ] Add serial output before adding a graphical console.
+- [x] Add a boot entry point and linker script.
+- [x] Initialize a known stack and transfer control to a K kernel entry point.
+- [x] Build a bootable image from a clean checkout.
+- [x] Add serial output before adding a graphical console.
 - [ ] Run the image in QEMU in automated tests.
-- [ ] Document how to build, run, debug, and inspect the image.
+- [x] Document how to build, run, debug, and inspect the image.
 
 **Done when:** QEMU boots the image and the kernel prints a deterministic
 startup message produced by code compiled from K.
+
+## Build and run
+
+From PowerShell:
+
+```powershell
+.\scripts\build.ps1
+.\scripts\run-qemu.ps1
+```
+
+The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
+enters x86-64 long mode, and emits `Hello, World!` on COM1. The current boot
+path is intentionally experimental and has no filesystem, interrupts, memory
+management, or hardware abstraction layer yet.
 
 ### Phase 4: Establish kernel foundations
 
