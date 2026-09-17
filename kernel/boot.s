@@ -14,7 +14,7 @@ _start:
     mov $0, %bx
     mov $dap, %si
     mov $0x42, %ah
-    mov 0x80, %dl
+    mov $0x80, %dl
     int $0x13
     jc disk_error
 
@@ -47,7 +47,7 @@ protected_mode:
     or $3, %eax
     mov %eax, 0xa000
     mov $0x83, %eax
-    mov %eax, 0xa008
+    mov %eax, 0xb000
 
     mov $0x9000, %eax
     mov %eax, %cr3
@@ -71,6 +71,7 @@ long_mode:
     mov %ax, %es
     mov %ax, %ss
     mov $0x80000, %rsp
+    call serial_init
     mov $0x10000, %rax
     call *%rax
     mov %rax, %rdi
@@ -89,6 +90,30 @@ serial_loop:
     inc %rdi
     jmp serial_loop
 serial_done:
+    ret
+
+serial_init:
+    mov $0x3f9, %dx
+    xor %al, %al
+    out %al, (%dx)
+    mov $0x3fb, %dx
+    mov $0x80, %al
+    out %al, (%dx)
+    mov $0x3f8, %dx
+    mov $0x01, %al
+    out %al, (%dx)
+    mov $0x3f9, %dx
+    xor %al, %al
+    out %al, (%dx)
+    mov $0x3fb, %dx
+    mov $0x03, %al
+    out %al, (%dx)
+    mov $0x3fa, %dx
+    mov $0xc7, %al
+    out %al, (%dx)
+    mov $0x3fc, %dx
+    mov $0x0b, %al
+    out %al, (%dx)
     ret
 
 .align 8

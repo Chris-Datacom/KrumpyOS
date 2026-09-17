@@ -70,7 +70,7 @@ or a host operating-system syscall interface.
 - [x] Initialize a known stack and transfer control to a K kernel entry point.
 - [x] Build a bootable image from a clean checkout.
 - [x] Add serial output before adding a graphical console.
-- [ ] Run the image in QEMU in automated tests.
+- [x] Run the image in QEMU in automated tests.
 - [x] Document how to build, run, debug, and inspect the image.
 
 **Done when:** QEMU boots the image and the kernel prints a deterministic
