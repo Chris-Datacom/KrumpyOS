@@ -1,21 +1,117 @@
 # KrumpyOS
 
-KrumpyOS is the operating-system project that will be developed alongside
-the K language.
+KrumpyOS is an experimental operating system being developed alongside the
+K programming language. K is the language and compiler project; KrumpyOS is
+the freestanding system that will consume it.
 
-## Repository relationship
+The repositories are intentionally separate so compiler and kernel changes can
+be versioned independently. K must provide the language, compiler, and target
+support required by the kernel before KrumpyOS can become bootable.
 
-- `K` is the language and compiler repository.
-- `KrumpyOS` is the OS repository that consumes K.
-- K must provide the freestanding target features needed by KrumpyOS.
+## Project status
 
-The repositories are intentionally separate so compiler changes and kernel
-changes can be versioned and released independently.
+KrumpyOS is currently at the planning stage. There is not yet a kernel,
+bootloader, linker layout, or bootable image. The sibling K compiler can
+currently parse, type-check, and emit x86-64 System V assembly for a small
+low-level subset of K.
 
-## Initial plan
+## Roadmap
 
-1. Define the x86-64 boot contract.
-2. Add a freestanding K target profile.
-3. Build a boot entry point and linker layout.
-4. Add serial or framebuffer output.
-5. Compile the first kernel subsystem with K.
+The milestones are ordered by dependency. A later milestone should not be
+considered complete if it only works through undocumented compiler behavior.
+
+### Phase 0: Define the foundation
+
+- [ ] Choose the first supported machine and emulator target (x86-64 and
+  QEMU are the initial candidates).
+- [ ] Document the boot protocol, execution mode, stack contract, memory map,
+  and kernel entry signature.
+- [ ] Define the first K language version and compatibility policy.
+- [ ] Establish a cross-repository test strategy between K and KrumpyOS.
+
+**Done when:** the boot contract and language version are written down and a
+small example can be used as an integration fixture.
+
+### Phase 1: Make K suitable for systems work
+
+- [ ] Specify fixed-width integer, byte, boolean, pointer, and `void` types.
+- [ ] Specify integer overflow, alignment, layout, pointer, and undefined
+  behavior rules.
+- [ ] Complete aggregate types and predictable struct layout.
+- [ ] Add explicit casts and conversions where the machine representation
+  requires them.
+- [ ] Add modules or a reproducible multi-file compilation model.
+- [ ] Define the unsafe boundary for raw memory and hardware access.
+- [ ] Keep lexer, parser, semantic-analysis, IR, and code-generation tests
+  beside each language feature.
+
+**Done when:** a versioned K program can express data structures and helper
+functions without relying on prototype-only syntax or host-runtime behavior.
+
+### Phase 2: Add a freestanding K target
+
+- [ ] Add a freestanding target profile separate from the Linux/System V
+  bootstrap target.
+- [ ] Define the target calling convention, object format, relocation rules,
+  and symbol visibility.
+- [ ] Add volatile reads and writes for memory-mapped devices.
+- [ ] Add compiler support for `no_std`-style builds with no libc, allocator,
+  garbage collector, or hidden runtime.
+- [ ] Produce object files or a well-defined assembly artifact suitable for
+  linking.
+- [ ] Add reproducible cross-compilation and binary inspection checks.
+
+**Done when:** K can compile a freestanding program that links without libc
+or a host operating-system syscall interface.
+
+### Phase 3: Boot the first KrumpyOS kernel
+
+- [ ] Add a boot entry point and linker script.
+- [ ] Initialize a known stack and transfer control to a K kernel entry point.
+- [ ] Build a bootable image from a clean checkout.
+- [ ] Add serial output before adding a graphical console.
+- [ ] Run the image in QEMU in automated tests.
+- [ ] Document how to build, run, debug, and inspect the image.
+
+**Done when:** QEMU boots the image and the kernel prints a deterministic
+startup message produced by code compiled from K.
+
+### Phase 4: Establish kernel foundations
+
+- [ ] Add panic and assertion handling.
+- [ ] Add physical memory discovery and a page-frame allocator.
+- [ ] Add page tables and a kernel virtual-memory layout.
+- [ ] Add interrupt descriptor-table setup and exception reporting.
+- [ ] Add a timer and a basic serial or keyboard driver.
+- [ ] Add a minimal kernel logging interface.
+
+**Done when:** the kernel can report faults, allocate memory, and continue
+running without depending on firmware services or a host OS.
+
+### Phase 5: Grow into an operating system
+
+- [ ] Add a scheduler and process or task model.
+- [ ] Define a system-call ABI.
+- [ ] Add user-mode execution and executable loading.
+- [ ] Add a filesystem and persistent storage driver.
+- [ ] Add a command shell and core user programs.
+- [ ] Add networking only after the memory, interrupt, and process contracts
+  are stable.
+
+**Done when:** a user program can boot, run, perform basic I/O, and exit
+through documented KrumpyOS interfaces.
+
+## Development principles
+
+- Keep the K language small, explicit, and easy to bootstrap.
+- Prefer specified behavior over accidental behavior inherited from the host.
+- Keep unsafe operations visible and testable.
+- Make every boot milestone reproducible in QEMU before targeting hardware.
+- Treat compiler, ABI, linker, and kernel changes as one integration surface.
+- Do not call a feature stable until it is documented and covered by tests.
+
+## Related project
+
+The K language and compiler are maintained in a separate repository. Keep
+compiler and kernel changes coordinated through the target contract and
+cross-repository integration tests described above.
