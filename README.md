@@ -85,6 +85,11 @@ From PowerShell:
 .\scripts\run-qemu.ps1
 ```
 
+The runner uses a Windows QEMU installation when available. Otherwise it
+automatically invokes `qemu-system-x86_64` from the Arch WSL distribution.
+The same commands can be run from Windows Terminal, PowerShell, or the VS
+Code integrated terminal. Stop QEMU with `Ctrl+C`.
+
 The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
 enters x86-64 long mode, and emits `Hello, World!` on COM1. The current boot
 path is intentionally experimental and has no filesystem, interrupts, memory
