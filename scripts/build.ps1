@@ -1,12 +1,42 @@
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $kRoot = (Resolve-Path (Join-Path $root "..\k")).Path
-$drive = $root.Substring(0, 1).ToLower()
-$rest = $root.Substring(2).Replace("\", "/")
-$wslRoot = "/mnt/$drive$rest"
-$wslKRoot = "/mnt/" + $kRoot.Substring(0, 1).ToLower() + $kRoot.Substring(2).Replace("\", "/")
+
+function Require-Command([string]$name) {
+    if ($null -eq (Get-Command $name -ErrorAction SilentlyContinue)) {
+        throw "Required command '$name' was not found. Install LLVM and QEMU, then retry."
+    }
+}
+
+Require-Command "cargo"
+Require-Command "clang"
+Require-Command "ld.lld"
+Require-Command "llvm-objcopy"
 
 New-Item -ItemType Directory -Force (Join-Path $root "target") | Out-Null
 cargo run --manifest-path (Join-Path $kRoot "Cargo.toml") -- compile (Join-Path $root "kernel\kernel.k") (Join-Path $root "target\kernel.s")
-wsl.exe sh -lc "set -eu; cd '$wslRoot'; as --64 -o target/kernel.o target/kernel.s; as --32 -o target/boot.o kernel/boot.s; ld -nostdlib -T kernel/linker.ld -o target/kernel.elf target/kernel.o; objcopy -O binary target/kernel.elf target/kernel.bin; test \`$(wc -c < target/kernel.bin) -le 32768; ld -nostdlib -T kernel/boot.ld -o target/boot.elf target/boot.o; objcopy -O binary target/boot.elf target/boot.bin; test \`$(wc -c < target/boot.bin) -eq 512; dd if=/dev/zero of=target/kernel.padded bs=512 count=64 status=none; dd if=target/kernel.bin of=target/kernel.padded conv=notrunc status=none; cat target/boot.bin target/kernel.padded > target/krumpyos.img"
-Write-Host "Built $root\target\krumpyos.img"
+clang --target=x86_64-unknown-elf -c (Join-Path $root "target\kernel.s") -o (Join-Path $root "target\kernel.o")
+clang --target=i386-unknown-elf -c (Join-Path $root "kernel\boot.s") -o (Join-Path $root "target\boot.o")
+ld.lld -m elf_x86_64 -nostdlib -T (Join-Path $root "kernel\linker.ld") -o (Join-Path $root "target\kernel.elf") (Join-Path $root "target\kernel.o")
+llvm-objcopy -O binary (Join-Path $root "target\kernel.elf") (Join-Path $root "target\kernel.bin")
+if ((Get-Item (Join-Path $root "target\kernel.bin")).Length -gt 32768) {
+    throw "Kernel payload exceeds the 64-sector boot limit."
+}
+ld.lld -m elf_i386 -nostdlib -T (Join-Path $root "kernel\boot.ld") -o (Join-Path $root "target\boot.elf") (Join-Path $root "target\boot.o")
+llvm-objcopy -O binary (Join-Path $root "target\boot.elf") (Join-Path $root "target\boot.bin")
+if ((Get-Item (Join-Path $root "target\boot.bin")).Length -ne 512) {
+    throw "Boot sector is not exactly 512 bytes."
+}
+$kernelPadded = Join-Path $root "target\kernel.padded"
+$image = Join-Path $root "target\krumpyos.img"
+$padding = New-Object byte[] 32768
+[IO.File]::WriteAllBytes($kernelPadded, $padding)
+$kernelBytes = [IO.File]::ReadAllBytes((Join-Path $root "target\kernel.bin"))
+[Array]::Copy($kernelBytes, 0, $padding, 0, $kernelBytes.Length)
+[IO.File]::WriteAllBytes($kernelPadded, $padding)
+$bootBytes = [IO.File]::ReadAllBytes((Join-Path $root "target\boot.bin"))
+$imageBytes = New-Object byte[] ($bootBytes.Length + $padding.Length)
+[Array]::Copy($bootBytes, 0, $imageBytes, 0, $bootBytes.Length)
+[Array]::Copy($padding, 0, $imageBytes, $bootBytes.Length, $padding.Length)
+[IO.File]::WriteAllBytes($image, $imageBytes)
+Write-Host "Built $image"
