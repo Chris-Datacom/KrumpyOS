@@ -38,7 +38,14 @@ At `exception_common`, the stack layout is:
 4. interrupted CS
 5. interrupted RFLAGS
 
-The handler receives the vector in `RDI` and the normalized error code in `RSI`.
-Recoverable handlers return with `iretq` so the interrupted context resumes.
+`exception_common` preserves all general-purpose registers (`RAX`, `RCX`, `RDX`,
+`RBX`, `RBP`, `RSI`, `RDI`, `R8`–`R15`) on the stack, clears the direction flag
+(`cld`) per the System V AMD64 ABI, and ensures 16-byte stack alignment before
+dispatching.
+
+The handler receives the vector in `RDI`, the normalized error code in `RSI`,
+and a pointer to the saved register frame in `RDX`.
+Recoverable handlers return with `iretq` after restoring all saved registers so
+the interrupted execution context resumes without state corruption.
 The serial diagnostics printed by the first two handlers are deterministic and
 use the literal strings `exception=0` and `exception=3`.
