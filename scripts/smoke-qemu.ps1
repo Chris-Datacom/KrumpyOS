@@ -46,7 +46,7 @@ $serial = if (Test-Path $output) {
 else {
     ""
 }
-if ($serial -notmatch "Hello, World!.*exception=3") {
+if ($serial -notmatch "(?s)Hello, World!.*exception=3") {
     throw "QEMU did not produce the expected ABI report."
 }
 if (-not $timedOut -and $process.ExitCode -ne 0) {
