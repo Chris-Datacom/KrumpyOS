@@ -71,11 +71,18 @@ long_mode:
     mov %ax, %es
     mov %ax, %ss
     mov $0x80000, %rsp
-    call serial_init
     mov $0x10000, %rax
     call *%rax
     mov %rax, %rdi
     call serial_write
+    call install_idt
+.ifdef TEST_DIVZERO
+    xor %rax, %rax
+    xor %rdx, %rdx
+    div %rax
+.else
+    int3
+.endif
 halt:
     hlt
     jmp halt
@@ -90,30 +97,6 @@ serial_loop:
     inc %rdi
     jmp serial_loop
 serial_done:
-    ret
-
-serial_init:
-    mov $0x3f9, %dx
-    xor %al, %al
-    out %al, (%dx)
-    mov $0x3fb, %dx
-    mov $0x80, %al
-    out %al, (%dx)
-    mov $0x3f8, %dx
-    mov $0x01, %al
-    out %al, (%dx)
-    mov $0x3f9, %dx
-    xor %al, %al
-    out %al, (%dx)
-    mov $0x3fb, %dx
-    mov $0x03, %al
-    out %al, (%dx)
-    mov $0x3fa, %dx
-    mov $0xc7, %al
-    out %al, (%dx)
-    mov $0x3fc, %dx
-    mov $0x0b, %al
-    out %al, (%dx)
     ret
 
 .align 8

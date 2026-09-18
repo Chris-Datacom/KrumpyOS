@@ -12,8 +12,9 @@ support required by the kernel before KrumpyOS can become bootable.
 
 KrumpyOS now has an experimental BIOS boot path. The first kernel payload is
 compiled from K, loaded by `kernel/boot.s`, and linked into a raw disk image.
-After entering x86-64 long mode it returns a K string to the boot entry, which
-writes the message to COM1. QEMU is the intended runner.
+After entering x86-64 long mode the bootstrap prints the startup banner, installs
+a minimal IDT, and triggers `int3` for the deterministic exception report on
+COM1. QEMU is the intended runner.
 
 ## Roadmap
 
@@ -76,8 +77,8 @@ or a host operating-system syscall interface.
 - [x] Run the image in QEMU in automated tests.
 - [x] Document how to build, run, debug, and inspect the image.
 
-**Done when:** QEMU boots the image and the kernel prints a deterministic
-startup message produced by code compiled from K.
+**Done when:** QEMU boots the image and the kernel produces a deterministic
+boot report from code compiled from K.
 
 ## Build and run
 
@@ -88,6 +89,7 @@ WSL:
 ```sh
 ./scripts/build.sh
 ./scripts/run-qemu.sh
+./scripts/smoke-qemu.sh
 ```
 
 On Windows PowerShell, use:
@@ -95,6 +97,7 @@ On Windows PowerShell, use:
 ```powershell
 .\scripts\build.ps1
 .\scripts\run-qemu.ps1
+.\scripts\smoke-qemu.ps1
 ```
 
 Install LLVM (`clang`, `ld.lld`, and `llvm-objcopy`) and QEMU natively on
@@ -116,9 +119,19 @@ The ARM64 compiler backend and ARM64 boot path are not implemented yet; this
 repository does not claim to boot natively on ARM hardware.
 
 The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
-enters x86-64 long mode, and emits `Hello, World!` on COM1. The current boot
-path is intentionally experimental and has no filesystem, interrupts, memory
-management, or hardware abstraction layer yet.
+enters x86-64 long mode, prints `Hello, World!`, installs a minimal IDT, and
+emits the deterministic `exception=3` report on COM1. The current boot path is
+intentionally experimental and has no filesystem, general interrupt handling,
+memory management, or hardware abstraction layer yet.
+
+The bounded smoke test runs QEMU without a display, captures COM1, and requires
+the `Hello, World!` banner followed by `exception=3`. QEMU is allowed to time
+out after the kernel reaches its halt loop; any other exit or missing serial
+output is a failure.
+
+Set `KRUMPYOS_TEST_DIVZERO=1` when building to trigger the divide-by-zero test
+path instead of the normal breakpoint smoke test while leaving the default image
+predictable.
 
 ### Phase 4: Establish kernel foundations
 

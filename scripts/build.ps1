@@ -1,6 +1,10 @@
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $kRoot = (Resolve-Path (Join-Path $root "..\k")).Path
+$asmFlags = @()
+if ($env:KRUMPYOS_TEST_DIVZERO -eq "1") {
+    $asmFlags += "-DTEST_DIVZERO=1"
+}
 
 function Require-Command([string]$name) {
     if ($null -eq (Get-Command $name -ErrorAction SilentlyContinue)) {
@@ -14,15 +18,16 @@ Require-Command "ld.lld"
 Require-Command "llvm-objcopy"
 
 New-Item -ItemType Directory -Force (Join-Path $root "target") | Out-Null
-cargo run --manifest-path (Join-Path $kRoot "Cargo.toml") -- compile (Join-Path $root "kernel\kernel.k") (Join-Path $root "target\kernel.s")
+cargo run --manifest-path (Join-Path $kRoot "Cargo.toml") -- compile (Join-Path $root "kernel\kernel.k") (Join-Path $root "target\kernel.s") x86_64-krumpyos
 clang --target=x86_64-unknown-elf -c (Join-Path $root "target\kernel.s") -o (Join-Path $root "target\kernel.o")
-clang --target=i386-unknown-elf -c (Join-Path $root "kernel\boot.s") -o (Join-Path $root "target\boot.o")
+clang --target=i386-unknown-elf $asmFlags -c (Join-Path $root "kernel\boot.s") -o (Join-Path $root "target\boot.o")
+clang --target=i386-unknown-elf $asmFlags -c (Join-Path $root "kernel\interrupts.s") -o (Join-Path $root "target\interrupts.o")
 ld.lld -m elf_x86_64 -nostdlib -T (Join-Path $root "kernel\linker.ld") -o (Join-Path $root "target\kernel.elf") (Join-Path $root "target\kernel.o")
 llvm-objcopy -O binary (Join-Path $root "target\kernel.elf") (Join-Path $root "target\kernel.bin")
 if ((Get-Item (Join-Path $root "target\kernel.bin")).Length -gt 32768) {
     throw "Kernel payload exceeds the 64-sector boot limit."
 }
-ld.lld -m elf_i386 -nostdlib -T (Join-Path $root "kernel\boot.ld") -o (Join-Path $root "target\boot.elf") (Join-Path $root "target\boot.o")
+ld.lld -m elf_i386 -nostdlib -T (Join-Path $root "kernel\boot.ld") -o (Join-Path $root "target\boot.elf") (Join-Path $root "target\boot.o") (Join-Path $root "target\interrupts.o")
 llvm-objcopy -O binary (Join-Path $root "target\boot.elf") (Join-Path $root "target\boot.bin")
 if ((Get-Item (Join-Path $root "target\boot.bin")).Length -ne 512) {
     throw "Boot sector is not exactly 512 bytes."
