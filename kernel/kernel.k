@@ -2,7 +2,11 @@ extern void install_idt();
 
 char* kernel_message() {
     setup_serial();
+    serial_write_str("step 1: serial init\n");
     install_idt();
+    serial_write_str("step 2: idt init\n");
+    setup_kernel_paging();
+    serial_write_str("step 3: paging init\n");
     return "Hello, World!\n";
 }
 
@@ -64,3 +68,49 @@ void k_exception_dispatch(u64 vector, u64 error_code, void* frame) {
     }
     serial_write_str("exception=?\n");
 }
+
+u64 alloc_page() {
+    let base_ptr = (u64*)655360;
+    let next = *base_ptr;
+    if (next == (u64)0) {
+        next = (u64)1048576;
+    }
+    *base_ptr = next + (u64)4096;
+    let page = (u64*)next;
+    let i = 0;
+    while (i < 512) {
+        page[i] = (u64)0;
+        i = i + 1;
+    }
+    return next;
+}
+
+void setup_kernel_paging() {
+    let pml4 = alloc_page();
+    let pdpt = alloc_page();
+    let pd = alloc_page();
+
+    let pml4_ptr = (u64*)pml4;
+    pml4_ptr[0] = pdpt | (u64)3;
+
+    let pdpt_ptr = (u64*)pdpt;
+    pdpt_ptr[0] = pd | (u64)3;
+
+    let pd_ptr = (u64*)pd;
+    let d = 0;
+    while (d < 4) {
+        let pt = alloc_page();
+        pd_ptr[d] = pt | (u64)3;
+        let pt_ptr = (u64*)pt;
+        let p = 0;
+        while (p < 512) {
+            let phys_addr = ((u64)d * (u64)2097152) + ((u64)p * (u64)4096);
+            pt_ptr[p] = phys_addr | (u64)3;
+            p = p + 1;
+        }
+        d = d + 1;
+    }
+
+    write_cr3(pml4);
+}
+
