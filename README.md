@@ -22,10 +22,10 @@ considered complete if it only works through undocumented compiler behavior.
 
 ### Phase 0: Define the foundation
 
-- [ ] Choose the first supported machine and emulator target (x86-64 and
-  QEMU are the initial candidates).
-- [ ] Document the boot protocol, execution mode, stack contract, memory map,
-  and kernel entry signature.
+- [x] Choose the first supported machine and emulator target (x86-64 and
+  QEMU).
+- [x] Document the initial BIOS boot path, long-mode transition, stack
+  contract, and K kernel entry.
 - [ ] Define the first K language version and compatibility policy.
 - [ ] Establish a cross-repository test strategy between K and KrumpyOS.
 
@@ -34,7 +34,8 @@ small example can be used as an integration fixture.
 
 ### Phase 1: Make K suitable for systems work
 
-- [ ] Specify fixed-width integer, byte, boolean, pointer, and `void` types.
+- [ ] Introduce fixed-width integer, byte, boolean, pointer, and `void` types
+  (in progress).
 - [ ] Specify integer overflow, alignment, layout, pointer, and undefined
   behavior rules.
 - [ ] Complete aggregate types and predictable struct layout.
@@ -47,6 +48,8 @@ small example can be used as an integration fixture.
 
 **Done when:** a versioned K program can express data structures and helper
 functions without relying on prototype-only syntax or host-runtime behavior.
+The fixed-width type names are currently in the Rust frontend and IR layout;
+exact-width backend operations are still open.
 
 ### Phase 2: Add a freestanding K target
 
