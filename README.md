@@ -81,17 +81,39 @@ startup message produced by code compiled from K.
 
 ## Build and run
 
-From PowerShell:
+The current bootable target is x86-64. The build uses LLVM's native
+cross-target tools, so it works from both ARM64 macOS and Windows without
+WSL:
+
+```sh
+./scripts/build.sh
+./scripts/run-qemu.sh
+```
+
+On Windows PowerShell, use:
 
 ```powershell
 .\scripts\build.ps1
 .\scripts\run-qemu.ps1
 ```
 
-The runner uses a Windows QEMU installation when available. Otherwise it
-automatically invokes `qemu-system-x86_64` from the Arch WSL distribution.
-The same commands can be run from Windows Terminal, PowerShell, or the VS
-Code integrated terminal. Stop QEMU with `Ctrl+C`.
+Install LLVM (`clang`, `ld.lld`, and `llvm-objcopy`) and QEMU natively on
+each development machine. The same commands can be run from a terminal or
+the VS Code integrated terminal. Stop QEMU with `Ctrl+C`.
+
+On macOS with Homebrew:
+
+```sh
+brew install llvm lld qemu
+export PATH="$(brew --prefix llvm)/bin:$(brew --prefix lld)/bin:$PATH"
+```
+
+Persist the `PATH` line in your shell profile. On Windows, install the LLVM
+Windows package and QEMU, then ensure the directories containing `clang`,
+`ld.lld`, `llvm-objcopy`, and `qemu-system-x86_64` are on `PATH`.
+
+The ARM64 compiler backend and ARM64 boot path are not implemented yet; this
+repository does not claim to boot natively on ARM hardware.
 
 The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
 enters x86-64 long mode, and emits `Hello, World!` on COM1. The current boot
