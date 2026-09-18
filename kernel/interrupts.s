@@ -84,7 +84,7 @@ exception_common:
     mov 120(%rsp), %rdi
     mov 128(%rsp), %rsi
     mov %rsp, %rdx
-    call exception_dispatch
+    call k_exception_dispatch
 
     popq %r15
     popq %r14
@@ -104,45 +104,6 @@ exception_common:
 
     addq $16, %rsp
     iretq
-
-exception_dispatch:
-    cmp $0, %rdi
-    je .handle_divide_by_zero
-    cmp $3, %rdi
-    je .handle_breakpoint
-    lea unknown_exception_message(%rip), %rdi
-    call serial_write
-    ret
-
-.handle_divide_by_zero:
-    lea divide_by_zero_message(%rip), %rdi
-    call serial_write
-    ret
-
-.handle_breakpoint:
-    lea breakpoint_message(%rip), %rdi
-    call serial_write
-    ret
-
-serial_write:
-    mov $0x3f8, %dx
-.Lserial_loop:
-    movzbq (%rdi), %rax
-    test %al, %al
-    jz .Lserial_done
-    out %al, (%dx)
-    inc %rdi
-    jmp .Lserial_loop
-.Lserial_done:
-    ret
-
-.section .rodata
-unknown_exception_message:
-    .asciz "exception=?\n"
-divide_by_zero_message:
-    .asciz "exception=0\n"
-breakpoint_message:
-    .asciz "exception=3\n"
 
 idt_descriptor:
     .word 256 * 16 - 1
