@@ -75,18 +75,18 @@ long_mode:
     call *%rax
     mov %rax, %rdi
     call serial_write
-    call install_idt
-.ifdef TEST_DIVZERO
+#ifdef TEST_DIVZERO
     xor %rax, %rax
     xor %rdx, %rdx
     div %rax
-.else
+#else
     int3
-.endif
+#endif
 halt:
     hlt
     jmp halt
 
+.globl serial_write
 serial_write:
     mov $0x3f8, %dx
 serial_loop:
