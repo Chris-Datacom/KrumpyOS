@@ -2,11 +2,14 @@
 
 KrumpyOS is an experimental operating system being developed alongside the
 K programming language. K is the language and compiler project; KrumpyOS is
-the freestanding system that will consume it.
+the freestanding system that will consume it and eventually host the
+self-compiled K toolchain.
 
 The repositories are intentionally separate so compiler and kernel changes can
-be versioned independently. K must provide the language, compiler, and target
-support required by the kernel before KrumpyOS can become bootable.
+be versioned independently. The long-term product is a self-hosting K system:
+the kernel and system software are written primarily in K, while the K
+compiler runs as an isolated user-space program alongside the shell, editor,
+manual viewer, core utilities, and `kpkg`.
 
 ## Project status
 
@@ -121,8 +124,10 @@ repository does not claim to boot natively on ARM hardware.
 The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
 enters x86-64 long mode, prints `Hello, World!`, installs a minimal IDT, and
 emits the deterministic `exception=3` report on COM1. The current boot path is
-intentionally experimental and has no filesystem, general interrupt handling,
-memory management, or hardware abstraction layer yet.
+intentionally experimental. It has an early bump page allocator, replacement
+identity page tables, and a minimal IDT, but no verified general memory
+manager, filesystem, general interrupt handling, scheduler, user space, or
+hardware abstraction layer yet.
 
 The bounded smoke test runs QEMU without a display, captures COM1, and requires
 the `Hello, World!` banner followed by `exception=3`. QEMU is allowed to time
@@ -136,27 +141,97 @@ predictable.
 ### Phase 4: Establish kernel foundations
 
 - [ ] Add panic and assertion handling.
-- [ ] Add physical memory discovery and a page-frame allocator.
-- [ ] Add page tables and a kernel virtual-memory layout.
-- [ ] Add interrupt descriptor-table setup and exception reporting.
-- [ ] Add a timer and a basic serial or keyboard driver.
+- [ ] Verify the early page-frame allocator and replacement page tables in
+  QEMU.
+- [ ] Add physical memory discovery and replace the bump allocator with a
+  reclaimable frame allocator.
+- [ ] Complete interrupt descriptor-table setup and exception reporting.
+- [ ] Add a timer and serial input.
+- [ ] Add an interactive serial recovery console.
 - [ ] Add a minimal kernel logging interface.
 
 **Done when:** the kernel can report faults, allocate memory, and continue
 running without depending on firmware services or a host OS.
 
-### Phase 5: Grow into an operating system
+### Phase 5: Scheduling and kernel concurrency
 
-- [ ] Add a scheduler and process or task model.
+- [ ] Introduce separate process and thread abstractions.
+- [ ] Add a single-core preemptive round-robin scheduler.
+- [ ] Add kernel stacks, context switching, an idle thread, and timer-driven
+  time slices.
+- [ ] Add blocking, waking, sleeping, yielding, and synchronization
+  primitives.
+- [ ] Validate scheduling with multiple kernel threads before adding user
+  mode.
+
+**Done when:** multiple kernel threads run, block, wake, and survive sustained
+timer preemption without corrupting state.
+
+### Phase 6: User space, permissions, and PID 1
+
 - [ ] Define a system-call ABI.
-- [ ] Add user-mode execution and executable loading.
+- [ ] Add isolated address spaces, ring-3 execution, and an executable loader.
+- [ ] Implement `spawn`, `exit`, `wait`, thread, handle, IPC, and terminal
+  primitives without requiring Unix `fork`.
+- [ ] Add UID/GID credentials, groups, file ownership and permissions, plus
+  narrowly scoped capabilities for privileged operations.
 - [ ] Add a filesystem and persistent storage driver.
-- [ ] Add a command shell and core user programs.
-- [ ] Add networking only after the memory, interrupt, and process contracts
-  are stable.
+- [ ] Start `kinit` as PID 1 to mount filesystems, supervise services, reap
+  orphaned children, start login sessions, and coordinate shutdown.
+- [ ] Add declarative service units and boot targets such as `minimal`,
+  `multi-user`, `server`, and `graphical`.
+- [ ] Add a normal user login path; reserve UID 0 for root and avoid requiring
+  root for ordinary applications.
 
 **Done when:** a user program can boot, run, perform basic I/O, and exit
-through documented KrumpyOS interfaces.
+through documented KrumpyOS interfaces, and PID 1 can supervise it.
+
+See [system architecture](docs/system-architecture.md) for the scheduler,
+process, permissions, and init contracts.
+
+### Phase 7: Self-hosted K userland
+
+- [ ] Add the KrumpyOS K runtime and standard library.
+- [ ] Cross-compile and run the K compiler as an ordinary user-space program.
+- [ ] Add a shell, terminal interface, Vim-inspired editor, `man`-style
+  documentation viewer, and small GNU-inspired core utilities.
+- [ ] Compile a K program inside KrumpyOS and execute the result.
+- [ ] Rebuild the K compiler inside KrumpyOS and pass reproducibility gates.
+
+The compiler belongs in developer and full installations. It is not part of
+the kernel or `kinit`.
+
+### Phase 8: Packages and network distribution
+
+- [ ] Define the `kpkg` manifest, lockfile, artifact, repository-index, and
+  installation database formats.
+- [ ] Install signed/checksummed precompiled artifacts by default.
+- [ ] Support explicit source installation from an exact Git tag or commit.
+- [ ] Isolate package builds and install transactionally with rollback.
+- [ ] Distinguish trusted core repositories from user-added repositories.
+- [ ] Add networking, TLS, and Git/HTTP transport only after process,
+  filesystem, and permission contracts are stable.
+
+Your Git server will host optional source repositories, package indexes, and
+release artifacts. Git transport does not imply trust; `kpkg` verifies the
+configured repository identity and selected artifact or source revision.
+
+See [userland and packages](docs/userland-and-packages.md).
+
+### Phase 9: Installable releases
+
+- [ ] Produce a bootable ISO containing a live/recovery environment.
+- [ ] Add a TUI installer with guided and manual storage configuration.
+- [ ] Install the bootloader, base system, users, default boot target, and
+  selected package profile transactionally.
+- [ ] Provide `minimal`, `server`, `developer`, and `full`/`desktop` profiles
+  as package groups rather than separate operating-system forks.
+- [ ] Default to a normal administrative user and require an explicit policy
+  choice for direct root login.
+- [ ] Add recovery, installation verification, and interrupted-install
+  handling.
+
+See [installer architecture](docs/installer.md).
 
 ## Development principles
 
@@ -165,6 +240,11 @@ through documented KrumpyOS interfaces.
 - Keep unsafe operations visible and testable.
 - Make every boot milestone reproducible in QEMU before targeting hardware.
 - Treat compiler, ABI, linker, and kernel changes as one integration surface.
+- Keep scheduling in the kernel and service policy in the user-space `kinit`
+  process.
+- Treat downloaded packages and build scripts as untrusted.
+- Build installation profiles from versioned package groups instead of
+  maintaining divergent editions.
 - Do not call a feature stable until it is documented and covered by tests.
 
 ## Related project

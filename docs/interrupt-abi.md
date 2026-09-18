@@ -49,3 +49,24 @@ Recoverable handlers return with `iretq` after restoring all saved registers so
 the interrupted execution context resumes without state corruption.
 The serial diagnostics printed by the first two handlers are deterministic and
 use the literal strings `exception=0` and `exception=3`.
+
+## Scheduler evolution
+
+The current exception path is a bootstrap ABI, not yet a scheduler context
+frame. Timer preemption will add a separately documented interrupt path that:
+
+1. saves the complete interrupted thread context
+2. acknowledges the timer source
+3. updates monotonic time and the current time slice
+4. requests scheduling only at a safe preemption boundary
+5. restores the selected thread and returns with `iretq`
+
+The scheduler will operate on threads; processes own address spaces,
+credentials, and handles. Interrupt masking and scheduler preemption controls
+must remain distinct. The initial scheduler is single-core preemptive
+round-robin; SMP and advanced scheduling classes are later work.
+
+User-mode exceptions must never be dispatched with kernel authority. The
+eventual trap frame must record the privilege transition and support returning
+to ring 3 or terminating the affected process through the documented process
+ABI.
