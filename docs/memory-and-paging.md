@@ -19,6 +19,11 @@ During early boot, the physical address space is laid out as follows:
 The frame allocator provides 4096-byte aligned physical pages.
 Dynamic physical allocations start at 1 MB (`0x100000`), leaving lower memory reserved for the kernel binary, IDT, and boot structures.
 
+The current allocator is an early bump allocator. It does not discover the
+machine memory map, reclaim frames, detect exhaustion, or enforce ownership.
+It must be verified under QEMU before later subsystems depend on it, then
+replaced by a frame allocator driven by boot-time physical-memory discovery.
+
 ## 4-Level Paging Architecture
 
 x86-64 uses 4 levels of translation tables:
@@ -31,3 +36,19 @@ Flags:
 - `Present (bit 0)`: Entry is valid
 - `Read/Write (bit 1)`: Page is writable
 - `User/Supervisor (bit 2)`: User privilege allowed if set
+
+## Planned virtual-memory model
+
+- Kernel mappings are supervisor-only and shared according to a documented
+  kernel layout.
+- Each user process owns an isolated address space.
+- User code, data, stack, shared memory, and mapped files receive explicit
+  read/write/execute permissions.
+- The kernel validates every user pointer crossing the syscall boundary.
+- Context switching changes the active address space when processes differ.
+- Package builds and the native K compiler run in user address spaces; they do
+  not receive direct access to page tables or physical memory.
+
+Page-frame ownership, mapping ownership, copy/unmap behavior, and out-of-memory
+handling must be explicit before user processes or the package manager are
+considered reliable.

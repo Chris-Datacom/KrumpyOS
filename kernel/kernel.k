@@ -2,11 +2,8 @@ extern void install_idt();
 
 char* kernel_message() {
     setup_serial();
-    serial_write_str("step 1: serial init\n");
     install_idt();
-    serial_write_str("step 2: idt init\n");
     setup_kernel_paging();
-    serial_write_str("step 3: paging init\n");
     return "Hello, World!\n";
 }
 
