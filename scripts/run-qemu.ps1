@@ -1,3 +1,5 @@
+$env:Path += ";C:\Program Files\qemu"
+
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $image = Join-Path $root "target\krumpyos.img"
