@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $image = Join-Path $root "target\krumpyos.img"
 $output = Join-Path $root "target\qemu-smoke.log"
+$input = Join-Path $root "target\qemu-smoke.in"
 
 if (-not (Test-Path $image)) {
     throw "KrumpyOS image was not found. Run .\scripts\build.ps1 first."
@@ -15,16 +16,18 @@ if ($null -eq $qemu) {
 if (Test-Path $output) {
     Remove-Item $output
 }
+Set-Content -Path $input -Value "`rhelp`recho smoke`rmem`r" -NoNewline
 
 $arguments = @(
     "-drive", "format=raw,file=$image",
-    "-serial", "file:$output",
+    "-serial", "stdio",
     "-display", "none",
     "-monitor", "none",
     "-no-reboot",
     "-no-shutdown"
 )
-$process = Start-Process -FilePath $qemu.Source -ArgumentList $arguments -PassThru
+$process = Start-Process -FilePath $qemu.Source -ArgumentList $arguments -PassThru `
+    -RedirectStandardInput $input -RedirectStandardOutput $output
 $timedOut = $false
 try {
     if (-not $process.WaitForExit(5000)) {
@@ -46,11 +49,11 @@ $serial = if (Test-Path $output) {
 else {
     ""
 }
-if ($serial -notmatch "(?s)Hello, World!.*exception=3") {
-    throw "QEMU did not produce the expected ABI report."
+if ($serial -notmatch "(?s)KrumpyOS console ready.*Commands:.*smoke.*next early page:.*krumpy> ") {
+    throw "QEMU did not produce the expected console report."
 }
 if (-not $timedOut -and $process.ExitCode -ne 0) {
     throw "QEMU exited with status $($process.ExitCode)."
 }
 
-Write-Host "QEMU smoke test passed: Hello, World! -> exception=3"
+Write-Host "QEMU smoke test passed: interactive serial console"

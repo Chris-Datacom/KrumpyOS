@@ -73,31 +73,14 @@ long_mode:
     mov $0x80000, %rsp
     mov $0x10000, %rax
     call *%rax
-    mov %rax, %rdi
-    call serial_write
 #ifdef TEST_DIVZERO
     xor %rax, %rax
     xor %rdx, %rdx
     div %rax
-#else
-    int3
 #endif
 halt:
     hlt
     jmp halt
-
-.globl serial_write
-serial_write:
-    mov $0x3f8, %dx
-serial_loop:
-    movzbq (%rdi), %rax
-    test %al, %al
-    jz serial_done
-    out %al, (%dx)
-    inc %rdi
-    jmp serial_loop
-serial_done:
-    ret
 
 .align 8
 dap:

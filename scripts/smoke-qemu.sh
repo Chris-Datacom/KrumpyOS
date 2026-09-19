@@ -18,23 +18,26 @@ if ! command -v timeout >/dev/null 2>&1; then
     exit 1
 fi
 
+input="$root/target/qemu-smoke.in"
+printf '\rhelp\recho smoke\rmem\r' > "$input"
 rm -f "$output"
 set +e
 timeout 5s qemu-system-x86_64 \
     -drive "format=raw,file=$image" \
-    -serial "file:$output" \
+    -serial stdio \
     -display none \
     -monitor none \
     -no-reboot \
-    -no-shutdown
+    -no-shutdown \
+    < "$input" > "$output"
 qemu_status=$?
 set -e
 
 serial=$(tr -d '\r' < "$output")
 case "$serial" in
-    *"Hello, World!"*"exception=3"*) ;;
+    *"KrumpyOS console ready"*"Commands:"*"smoke"*"next early page:"*"krumpy> "*) ;;
     *)
-        echo "error: QEMU did not produce the expected ABI report" >&2
+        echo "error: QEMU did not produce the expected console report" >&2
         cat "$output" >&2 2>/dev/null || true
         exit 1
         ;;
@@ -45,4 +48,4 @@ if [ "$qemu_status" -ne 0 ] && [ "$qemu_status" -ne 124 ]; then
     exit "$qemu_status"
 fi
 
-echo "QEMU smoke test passed: Hello, World! -> exception=3"
+echo "QEMU smoke test passed: interactive serial console"
