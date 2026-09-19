@@ -15,9 +15,9 @@ manual viewer, core utilities, and `kpkg`.
 
 KrumpyOS now has an experimental BIOS boot path. The first kernel payload is
 compiled from K, loaded by `kernel/boot.s`, and linked into a raw disk image.
-After entering x86-64 long mode the bootstrap prints the startup banner, installs
-a minimal IDT, and triggers `int3` for the deterministic exception report on
-COM1. QEMU is the intended runner.
+After entering x86-64 long mode the K kernel initializes COM1, installs a
+minimal IDT, switches to its early page tables, and starts an interactive
+serial recovery console. QEMU is the intended runner.
 
 ## Roadmap
 
@@ -122,21 +122,21 @@ The ARM64 compiler backend and ARM64 boot path are not implemented yet; this
 repository does not claim to boot natively on ARM hardware.
 
 The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
-enters x86-64 long mode, prints `Hello, World!`, installs a minimal IDT, and
-emits the deterministic `exception=3` report on COM1. The current boot path is
+enters x86-64 long mode, initializes a minimal IDT and early paging, then
+starts the `krumpy> ` console on COM1. The current boot path is
 intentionally experimental. It has an early bump page allocator, replacement
 identity page tables, and a minimal IDT, but no verified general memory
 manager, filesystem, general interrupt handling, scheduler, user space, or
 hardware abstraction layer yet.
 
-The bounded smoke test runs QEMU without a display, captures COM1, and requires
-the `Hello, World!` banner followed by `exception=3`. QEMU is allowed to time
-out after the kernel reaches its halt loop; any other exit or missing serial
-output is a failure.
+The bounded smoke test runs QEMU without a display, sends `help`, `echo smoke`,
+and `mem` over COM1, and verifies their output. QEMU is allowed to time out
+while the console waits for more input; any other exit or missing serial output
+is a failure.
 
-Set `KRUMPYOS_TEST_DIVZERO=1` when building to trigger the divide-by-zero test
-path instead of the normal breakpoint smoke test while leaving the default image
-predictable.
+Set `KRUMPYOS_TEST_DIVZERO=1` when building to retain the divide-by-zero test
+path if the kernel entry unexpectedly returns. Normal builds remain in the
+interactive console.
 
 ### Phase 4: Establish kernel foundations
 
@@ -146,8 +146,9 @@ predictable.
 - [ ] Add physical memory discovery and replace the bump allocator with a
   reclaimable frame allocator.
 - [ ] Complete interrupt descriptor-table setup and exception reporting.
-- [ ] Add a timer and serial input.
-- [ ] Add an interactive serial recovery console.
+- [ ] Add a timer.
+- [x] Add polling serial input.
+- [x] Add an interactive serial recovery console.
 - [ ] Add a minimal kernel logging interface.
 
 **Done when:** the kernel can report faults, allocate memory, and continue

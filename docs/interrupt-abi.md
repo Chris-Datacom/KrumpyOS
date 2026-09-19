@@ -10,11 +10,11 @@ bootstrapping.
   physical address `0x10000`.
 - After enabling x86-64 long mode, the bootstrap sets `RSP = 0x80000` and
   calls the K entry at `0x10000`.
-- `kernel_message(void)` on the K side programs COM1 and returns a pointer to
-  the startup message, which the bootstrap prints before entering the interrupt
-  ABI.
-- The bootstrap installs the IDT and executes either `int3` (default) or a
-  deliberate divide-by-zero path when `KRUMPYOS_TEST_DIVZERO=1` is set.
+- `kernel_main(void)` on the K side programs COM1, installs the IDT, activates
+  the early kernel page tables, and enters the serial recovery console.
+- A build with `KRUMPYOS_TEST_DIVZERO=1` retains the deliberate divide-by-zero
+  path if the kernel entry unexpectedly returns. Normal interactive builds do
+  not deliberately trigger an exception.
 
 ## IDT layout
 

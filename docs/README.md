@@ -4,15 +4,14 @@ Architecture notes, boot assumptions, linker layout, and hardware plans
 belong here. Keep OS-specific decisions in this repository; language and
 compiler decisions belong in the sibling K repository.
 
-The current implementation has an experimental BIOS boot path for x86-64:
-QEMU loads a fixed kernel payload, the boot code enters long mode, prints the
-startup banner, installs a minimal IDT, triggers `int3`, and writes the
-kernel-provided exception report to COM1. See [interrupt-abi.md](./interrupt-abi.md)
-for the current interrupt contract.
+The current implementation has an experimental BIOS boot path for x86-64.
+QEMU loads a fixed kernel payload, the boot code enters long mode, and the K
+kernel initializes paging, the IDT, and an interactive COM1 recovery console.
+See [interrupt-abi.md](./interrupt-abi.md) for the current exception contract.
 
 Run `scripts/smoke-qemu.sh` (or `scripts\smoke-qemu.ps1` on Windows) for the
-bounded boot smoke test. It verifies the ABI by requiring the `Hello, World!`
-startup banner followed by the deterministic `exception=3` COM1 report.
+bounded boot smoke test. It sends commands through COM1 and verifies the
+console banner, command list, echo response, memory report, and prompt.
 
 ## Architecture documents
 
@@ -20,6 +19,8 @@ startup banner followed by the deterministic `exception=3` COM1 report.
   entry and register-frame contract.
 - [Memory management and paging](./memory-and-paging.md): current early memory
   map and the planned progression to isolated address spaces.
+- [Serial recovery console](./serial-console.md): current COM1 input, line
+  editing, commands, and smoke-test contract.
 - [System architecture](./system-architecture.md): scheduler, process/thread
   model, syscalls, permissions, IPC, `kinit`, services, and shutdown.
 - [Userland and packages](./userland-and-packages.md): bundled K toolchain,
