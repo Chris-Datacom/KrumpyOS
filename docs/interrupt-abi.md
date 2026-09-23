@@ -1,8 +1,7 @@
 # Interrupt and exception ABI
 
-KrumpyOS currently brings up a small x86-64 exception path for vectors 0 and 3.
-The ABI stays intentionally small and deterministic while the kernel is still
-bootstrapping.
+KrumpyOS brings up an x86-64 exception and interrupt path for CPU faults and hardware IRQs.
+The ABI stays intentionally small and deterministic while the kernel is bootstrapping.
 
 ## Bootstrap contract
 
@@ -10,8 +9,10 @@ bootstrapping.
   physical address `0x10000`.
 - After enabling x86-64 long mode, the bootstrap sets `RSP = 0x80000` and
   calls the K entry at `0x10000`.
-- `kernel_main(void)` on the K side programs COM1, installs the IDT, activates
-  the early kernel page tables, and enters the serial recovery console.
+- `kernel_main(void)` on the K side programs COM1, installs the IDT, remaps
+  the 8259 PIC (master to vector 32, slave to vector 40), initializes the
+  8254 PIT timer to 100 Hz, activates the early kernel page tables, enables
+  interrupts with `sti()`, and enters the serial recovery console.
 - A build with `KRUMPYOS_TEST_DIVZERO=1` retains the deliberate divide-by-zero
   path if the kernel entry unexpectedly returns. Normal interactive builds do
   not deliberately trigger an exception.
@@ -19,54 +20,47 @@ bootstrapping.
 ## IDT layout
 
 - The boot path builds a 256-entry IDT in RAM at `0x81000`.
-- Vector 0 (divide by zero) and vector 3 (breakpoint) are each installed as a
-  64-bit interrupt gate with selector `0x18`, IST `0`, and the present bit set.
-- All other entries remain zero for now.
+- Vector 0 (divide by zero), vector 3 (breakpoint), and vector 13 (general protection fault)
+  are installed as 64-bit interrupt gates with selector `0x18`, IST `0`, and the present bit set.
+- Vector 32 (IRQ 0 - PIT timer) is installed as a 64-bit interrupt gate pointing to `timer_stub`.
+- Other entries remain zero or are installed dynamically via `set_idt_gate`.
 
-## Exception stub ABI
+## 8259 PIC and 8254 PIT Configuration
 
-The reusable `exception_common` entry normalizes both CPU and synthetic frames.
-For exceptions without a hardware error code, the stub pushes a synthetic error
-code `0` before the vector number so the frame matches the same layout as a
-trapped fault with a hardware error code.
+- **8259 PIC**: Master (ports `0x20`/`0x21`) is remapped to vectors 32–39; Slave (ports `0xA0`/`0xA1`)
+  is remapped to vectors 40–47. IRQ 0 (timer) is unmasked on the master PIC.
+- **8254 PIT**: Configured in mode 3 (square wave) on Channel 0 (port `0x40`/`0x43`) with divisor
+  11931 for a periodic 100 Hz timer interrupt (10 ms per tick).
+- **EOI Protocol**: `pic_send_eoi(irq)` sends `0x20` to master port `0x20` (and slave port `0xA0` if `irq >= 8`).
 
-At `exception_common`, the stack layout is:
+## Exception and Interrupt Stub ABI
 
-1. vector number
-2. error code
+The reusable `exception_common` and `interrupt_common` entries normalize both CPU and synthetic frames:
+
+At dispatch, the stack layout is:
+
+1. vector number (at `120(%rsp)`)
+2. error code (at `128(%rsp)`)
 3. interrupted RIP
 4. interrupted CS
 5. interrupted RFLAGS
 
-`exception_common` preserves all general-purpose registers (`RAX`, `RCX`, `RDX`,
-`RBX`, `RBP`, `RSI`, `RDI`, `R8`–`R15`) on the stack, clears the direction flag
-(`cld`) per the System V AMD64 ABI, and ensures 16-byte stack alignment before
-dispatching.
+`exception_common` and `interrupt_common` preserve all general-purpose registers
+(`RAX`, `RCX`, `RDX`, `RBX`, `RBP`, `RSI`, `RDI`, `R8`–`R15`) on the stack, clear the direction flag
+(`cld`), and ensure 16-byte stack alignment before calling `k_exception_dispatch` or `k_interrupt_dispatch`.
 
-The handler receives the vector in `RDI`, the normalized error code in `RSI`,
-and a pointer to the saved register frame in `RDX`.
-Recoverable handlers return with `iretq` after restoring all saved registers so
-the interrupted execution context resumes without state corruption.
-The serial diagnostics printed by the first two handlers are deterministic and
-use the literal strings `exception=0` and `exception=3`.
+- Exceptions: received by `k_exception_dispatch(vector, error_code, frame)`.
+- Interrupts: received by `k_interrupt_dispatch(vector, error_code, frame)`. Vector 32 increments the system
+  monotonic tick counter at `0x83008` and acknowledges the PIC with `pic_send_eoi(0)`.
+
+Handlers return with `iretq` after restoring all saved registers so the interrupted execution context resumes seamlessly.
 
 ## Scheduler evolution
 
-The current exception path is a bootstrap ABI, not yet a scheduler context
-frame. Timer preemption will add a separately documented interrupt path that:
+Timer preemption builds directly on this interrupt path:
 
 1. saves the complete interrupted thread context
-2. acknowledges the timer source
+2. acknowledges the timer source and increments ticks
 3. updates monotonic time and the current time slice
-4. requests scheduling only at a safe preemption boundary
-5. restores the selected thread and returns with `iretq`
-
-The scheduler will operate on threads; processes own address spaces,
-credentials, and handles. Interrupt masking and scheduler preemption controls
-must remain distinct. The initial scheduler is single-core preemptive
-round-robin; SMP and advanced scheduling classes are later work.
-
-User-mode exceptions must never be dispatched with kernel authority. The
-eventual trap frame must record the privilege transition and support returning
-to ring 3 or terminating the affected process through the documented process
-ABI.
+4. checks thread time slice expiration and triggers preemption at safe boundaries
+5. restores the next scheduled thread context and returns with `iretq`

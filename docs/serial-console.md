@@ -27,7 +27,11 @@ the reserved page beginning at physical address `0x82000`.
 
 - `help`: list commands
 - `echo TEXT`: print `TEXT`
-- `mem`: display the identity-mapped range and next bump-allocator page
+- `mem`: display physical memory statistics (total, used, free KB and pages) and frame allocator bitmap state
+- `ps`: list active kernel threads, their execution states (READY, RUNNING, BLOCKED, DEAD), and total CPU ticks run
+- `yield`: cooperatively yield the current thread's time slice to the scheduler
+- `uptime`: display system uptime in seconds and monotonic timer ticks
+- `panic`: trigger a test kernel panic with register and stack dump
 - `clear`: emit ANSI terminal clear/home sequences
 - `reboot`: request reset through the legacy keyboard controller
 - `halt`: disable interrupts and halt the CPU

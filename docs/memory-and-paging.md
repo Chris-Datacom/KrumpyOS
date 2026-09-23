@@ -12,21 +12,18 @@ During early boot, the physical address space is laid out as follows:
 | `0x10000 - 0x17FFF` | 32 KB | Kernel code/data image (loaded by bootloader) |
 | `0x80000` | - | Initial boot stack pointer (`RSP`) |
 | `0x81000 - 0x81FFF` | 4 KB | Interrupt Descriptor Table (IDT, 256 gates) |
-| `0x82000 - 0x82FFF` | 4 KB | Serial recovery-console line buffer |
-| `0x83000 - 0x83FFF` | 4 KB | Early allocator metadata |
+| `0x82000 - 0x82FFF` | 4 KB | Serial recovery-console line & scratch buffers |
+| `0x83000 - 0x83FFF` | 4 KB | Kernel memory state & timer tick counters |
+| `0x84000 - 0x840FF` | 256 B | Physical frame bitmap (2048 pages / 8 MB) |
 | `0x100000` (1 MB) | - | Start of dynamic physical memory heap / frames |
 
 ## Physical Page Frame Allocator
 
-The frame allocator provides 4096-byte aligned physical pages.
-Dynamic physical allocations start at 1 MB (`0x100000`), leaving lower memory reserved for the kernel binary, IDT, and boot structures.
-
-The current allocator is an early bump allocator. Its next-frame cursor is
-stored at `0x83000`; it must not use the legacy VGA aperture beginning at
-`0xA0000` as ordinary RAM. It does not discover the
-machine memory map, reclaim frames, detect exhaustion, or enforce ownership.
-It must be verified under QEMU before later subsystems depend on it, then
-replaced by a frame allocator driven by boot-time physical-memory discovery.
+The physical frame allocator provides 4096-byte aligned physical pages tracked by a bitmapped memory manager (`pmm_init`, `alloc_page`, `free_page`):
+- Memory below 1 MB (`0x000000 - 0x0FFFFF`, pages 0..255) is permanently marked reserved in the bitmap.
+- Dynamic physical allocations allocate and free frames from the pool starting at 1 MB (`0x100000`).
+- The bitmap is located at `0x84000`, containing 256 bytes (2048 bits) tracking the 8 MB physical address space.
+- The allocator tracks total, used, and free page frames, reporting out-of-memory errors through the kernel panic interface.
 
 ## 4-Level Paging Architecture
 

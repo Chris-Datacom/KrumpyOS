@@ -19,7 +19,7 @@ if ! command -v timeout >/dev/null 2>&1; then
 fi
 
 input="$root/target/qemu-smoke.in"
-printf '\rhelp\recho smoke\rmem\r' > "$input"
+printf '\rhelp\recho smoke\rmem\rps\ryield\ruptime\r' > "$input"
 rm -f "$output"
 set +e
 timeout 5s qemu-system-x86_64 \
@@ -35,7 +35,7 @@ set -e
 
 serial=$(tr -d '\r' < "$output")
 case "$serial" in
-    *"KrumpyOS console ready"*"Commands:"*"smoke"*"next early page:"*"krumpy> "*) ;;
+    *"KrumpyOS console ready"*"Commands:"*"smoke"*"Physical Memory Map:"*"Kernel Threads / Processes:"*"Yielded."*"uptime:"*"krumpy> "*) ;;
     *)
         echo "error: QEMU did not produce the expected console report" >&2
         cat "$output" >&2 2>/dev/null || true
