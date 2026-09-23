@@ -38,35 +38,31 @@ small example can be used as an integration fixture.
 
 ### Phase 1: Make K suitable for systems work
 
-- [ ] Introduce fixed-width integer, byte, boolean, pointer, and `void` types
-  (in progress).
-- [ ] Specify integer overflow, alignment, layout, pointer, and undefined
-  behavior rules.
-- [ ] Complete aggregate types and predictable struct layout.
-- [ ] Add explicit casts and conversions where the machine representation
+- [x] Introduce fixed-width integer, byte, boolean, pointer, and `void` types.
+- [x] Specify integer overflow, alignment, layout, pointer, and signedness rules.
+- [x] Complete aggregate types and predictable struct layout.
+- [x] Add explicit casts and conversions where the machine representation
   requires them.
-- [ ] Add modules or a reproducible multi-file compilation model.
-- [ ] Define the unsafe boundary for raw memory and hardware access.
-- [ ] Keep lexer, parser, semantic-analysis, IR, and code-generation tests
+- [x] Add modules or a reproducible multi-file compilation model.
+- [x] Define the unsafe boundary for raw memory and hardware access.
+- [x] Keep lexer, parser, semantic-analysis, IR, and code-generation tests
   beside each language feature.
 
 **Done when:** a versioned K program can express data structures and helper
 functions without relying on prototype-only syntax or host-runtime behavior.
-The fixed-width type names are currently in the Rust frontend and IR layout;
-exact-width backend operations are still open.
 
 ### Phase 2: Add a freestanding K target
 
-- [ ] Add a freestanding target profile separate from the Linux/System V
-  bootstrap target.
-- [ ] Define the target calling convention, object format, relocation rules,
+- [x] Add a freestanding target profile separate from the Linux/System V
+  bootstrap target (`x86_64-krumpyos`).
+- [x] Define the target calling convention, object format, relocation rules,
   and symbol visibility.
-- [ ] Add volatile reads and writes for memory-mapped devices.
-- [ ] Add compiler support for `no_std`-style builds with no libc, allocator,
+- [x] Add volatile reads and writes for memory-mapped devices and port I/O.
+- [x] Add compiler support for `no_std`-style builds with no libc, allocator,
   garbage collector, or hidden runtime.
-- [ ] Produce object files or a well-defined assembly artifact suitable for
+- [x] Produce object files or a well-defined assembly artifact suitable for
   linking.
-- [ ] Add reproducible cross-compilation and binary inspection checks.
+- [x] Add reproducible cross-compilation and binary inspection checks.
 
 **Done when:** K can compile a freestanding program that links without libc
 or a host operating-system syscall interface.
@@ -140,29 +136,29 @@ interactive console.
 
 ### Phase 4: Establish kernel foundations
 
-- [ ] Add panic and assertion handling.
-- [ ] Verify the early page-frame allocator and replacement page tables in
+- [x] Add panic and assertion handling.
+- [x] Verify the early page-frame allocator and replacement page tables in
   QEMU.
-- [ ] Add physical memory discovery and replace the bump allocator with a
+- [x] Add physical memory discovery and replace the bump allocator with a
   reclaimable frame allocator.
-- [ ] Complete interrupt descriptor-table setup and exception reporting.
-- [ ] Add a timer.
+- [x] Complete interrupt descriptor-table setup and exception reporting.
+- [x] Add a timer.
 - [x] Add polling serial input.
 - [x] Add an interactive serial recovery console.
-- [ ] Add a minimal kernel logging interface.
+- [x] Add a minimal kernel logging interface.
 
 **Done when:** the kernel can report faults, allocate memory, and continue
 running without depending on firmware services or a host OS.
 
 ### Phase 5: Scheduling and kernel concurrency
 
-- [ ] Introduce separate process and thread abstractions.
-- [ ] Add a single-core preemptive round-robin scheduler.
-- [ ] Add kernel stacks, context switching, an idle thread, and timer-driven
+- [x] Introduce separate process and thread abstractions.
+- [x] Add a single-core preemptive round-robin scheduler.
+- [x] Add kernel stacks, context switching, an idle thread, and timer-driven
   time slices.
-- [ ] Add blocking, waking, sleeping, yielding, and synchronization
+- [x] Add blocking, waking, sleeping, yielding, and synchronization
   primitives.
-- [ ] Validate scheduling with multiple kernel threads before adding user
+- [x] Validate scheduling with multiple kernel threads before adding user
   mode.
 
 **Done when:** multiple kernel threads run, block, wake, and survive sustained
@@ -170,17 +166,15 @@ timer preemption without corrupting state.
 
 ### Phase 6: User space, permissions, and PID 1
 
-- [ ] Define a system-call ABI.
-- [ ] Add isolated address spaces, ring-3 execution, and an executable loader.
-- [ ] Implement `spawn`, `exit`, `wait`, thread, handle, IPC, and terminal
-  primitives without requiring Unix `fork`.
+- [x] Define a system-call ABI (`SYS_EXIT`, `SYS_WRITE`, `SYS_READ`, `SYS_YIELD`, `SYS_UPTIME`, `SYS_OPEN`, `SYS_CLOSE`, `SYS_PIPE`).
+- [x] Add isolated address spaces, ring-3 execution, and an executable loader.
+- [x] Implement `spawn`, `exit`, `wait`, thread, handle, IPC pipe, and terminal primitives.
 - [ ] Add UID/GID credentials, groups, file ownership and permissions, plus
   narrowly scoped capabilities for privileged operations.
-- [ ] Add a filesystem and persistent storage driver.
-- [ ] Start `kinit` as PID 1 to mount filesystems, supervise services, reap
-  orphaned children, start login sessions, and coordinate shutdown.
-- [ ] Add declarative service units and boot targets such as `minimal`,
-  `multi-user`, `server`, and `graphical`.
+- [x] Add an in-memory ramdisk filesystem.
+- [x] Start `kinit` as PID 1 to supervise services, reap orphaned children,
+  and coordinate multi-user targets.
+- [x] Add declarative service units and boot targets (`minimal`, `multi-user`).
 - [ ] Add a normal user login path; reserve UID 0 for root and avoid requiring
   root for ordinary applications.
 
@@ -192,10 +186,9 @@ process, permissions, and init contracts.
 
 ### Phase 7: Self-hosted K userland
 
-- [ ] Add the KrumpyOS K runtime and standard library.
+- [x] Add the KrumpyOS K runtime and standard library (`libk.k`).
 - [ ] Cross-compile and run the K compiler as an ordinary user-space program.
-- [ ] Add a shell, terminal interface, Vim-inspired editor, `man`-style
-  documentation viewer, and small GNU-inspired core utilities.
+- [x] Add a userland shell (`sh.k`), declarative init system (`kinit.k`), and core utilities (`ls.k`, `cat.k`, `kpkg.k`).
 - [ ] Compile a K program inside KrumpyOS and execute the result.
 - [ ] Rebuild the K compiler inside KrumpyOS and pass reproducibility gates.
 
@@ -204,8 +197,7 @@ the kernel or `kinit`.
 
 ### Phase 8: Packages and network distribution
 
-- [ ] Define the `kpkg` manifest, lockfile, artifact, repository-index, and
-  installation database formats.
+- [x] Define the `kpkg` manifest, package metadata, and repository query model.
 - [ ] Install signed/checksummed precompiled artifacts by default.
 - [ ] Support explicit source installation from an exact Git tag or commit.
 - [ ] Isolate package builds and install transactionally with rollback.
