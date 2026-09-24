@@ -119,7 +119,7 @@ repository does not claim to boot natively on ARM hardware.
 
 The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
 enters x86-64 long mode, initializes a minimal IDT and early paging, then
-starts the `krumpy> ` console on COM1. The current boot path is
+displays a fastfetch-style system banner and starts the `user@krumpyos> ` console on COM1. The current boot path is
 intentionally experimental. It has an early bump page allocator, replacement
 identity page tables, and a minimal IDT, but no verified general memory
 manager, filesystem, general interrupt handling, scheduler, user space, or

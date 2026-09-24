@@ -9,12 +9,22 @@ _start:
     mov %ax, %ss
     mov $0x7c00, %sp
 
+    /* Save boot drive ID passed by BIOS / Apple CSM in %dl */
+    mov %dl, boot_drive
+
+    /* Enable Fast A20 gate via System Control Port A (0x92) */
+    inb $0x92, %al
+    orb $2, %al
+    andb $0xfe, %al
+    outb %al, $0x92
+
+    /* Read kernel sectors from USB boot drive into 0x10000 */
     mov $0x1000, %ax
     mov %ax, %es
     mov $0, %bx
     mov $dap, %si
     mov $0x42, %ah
-    mov $0x80, %dl
+    mov boot_drive, %dl
     int $0x13
     jc disk_error
 
@@ -81,6 +91,10 @@ long_mode:
 halt:
     hlt
     jmp halt
+
+.align 8
+boot_drive:
+    .byte 0x80
 
 .align 8
 dap:
