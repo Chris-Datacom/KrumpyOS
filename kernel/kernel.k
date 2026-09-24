@@ -135,7 +135,10 @@ void schedule() {
     let current_tid_ptr = (u64*)536592;
     let curr_tid = *current_tid_ptr;
 
-    let next_tid = (curr_tid + (u64)1) % (u64)4;
+    let next_tid = curr_tid + (u64)1;
+    if (next_tid == (u64)4) {
+        next_tid = (u64)0;
+    }
     let count = 0;
     while (count < 4) {
         let state = tcb_base[(int)next_tid * 8 + 1];
@@ -154,7 +157,10 @@ void schedule() {
             }
             return;
         }
-        next_tid = (next_tid + (u64)1) % (u64)4;
+        next_tid = next_tid + (u64)1;
+        if (next_tid == (u64)4) {
+            next_tid = (u64)0;
+        }
         count = count + 1;
     }
 }
@@ -562,7 +568,7 @@ void k_panic(char* msg, void* frame) {
 }
 
 void k_assert(bool cond, char* msg) {
-    if (!cond) {
+    if (cond == false) {
         k_panic(msg, (void*)0);
     }
 }
@@ -574,27 +580,26 @@ struct ThreadContext {
     u64 stack_base;
     u64 ticks;
     u64 cr3;
-};
+}
 
 struct RamdiskEntry {
-    char* path;
+    char* name;
     char* data;
     u64 size;
-};
+}
 
 struct PipeBuffer {
-    u64 read_pos;
-    u64 write_pos;
-    u64 count;
-    u64 capacity;
-};
+    char* buf;
+    u64 head;
+    u64 tail;
+}
 
 struct MemoryStats {
     u64 total_pages;
     u64 used_pages;
     u64 free_pages;
     u64 bitmap_base;
-};
+}
 
 int ramdisk_open(char* path) {
     if (string_equal(path, "/etc/hostname")) {
@@ -656,7 +661,7 @@ void spawn_kinit() {
 
 u64 k_syscall_dispatch(u64 num, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5) {
     if (num == (u64)1) {
-        /* SYS_EXIT: mark current thread dead and schedule */
+        // SYS_EXIT: mark current thread dead and schedule
         let current_tid_ptr = (u64*)536592;
         let curr_tid = *current_tid_ptr;
         let tcb_base = (u64*)544768;
@@ -665,7 +670,7 @@ u64 k_syscall_dispatch(u64 num, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5) {
         return (u64)0;
     }
     if (num == (u64)2) {
-        /* SYS_WRITE: write string (a1 = char* buf, a2 = length) */
+        // SYS_WRITE: write string (a1 = char* buf, a2 = length)
         let buf = (char*)a1;
         let len = a2;
         let i = (u64)0;
@@ -676,32 +681,32 @@ u64 k_syscall_dispatch(u64 num, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5) {
         return len;
     }
     if (num == (u64)3) {
-        /* SYS_READ: read char */
+        // SYS_READ: read char
         let c = serial_read_char();
         return (u64)c;
     }
     if (num == (u64)4) {
-        /* SYS_YIELD: yield CPU */
+        // SYS_YIELD: yield CPU
         thread_yield();
         return (u64)0;
     }
     if (num == (u64)5) {
-        /* SYS_UPTIME: return monotonic ticks */
+        // SYS_UPTIME: return monotonic ticks
         let ticks_ptr = (u64*)536584;
         return *ticks_ptr;
     }
     if (num == (u64)6) {
-        /* SYS_OPEN: a1 = char* filename */
+        // SYS_OPEN: a1 = char* filename
         let path = (char*)a1;
         let fd = ramdisk_open(path);
         return (u64)fd;
     }
     if (num == (u64)7) {
-        /* SYS_CLOSE: a1 = int fd */
+        // SYS_CLOSE: a1 = int fd
         return (u64)0;
     }
     if (num == (u64)8) {
-        /* SYS_PIPE: a1 = int* pipe_fds */
+        // SYS_PIPE: a1 = int* pipe_fds
         let fds = (int*)a1;
         fds[0] = 10;
         fds[1] = 11;
@@ -828,7 +833,7 @@ void free_page(u64 addr) {
     let page_num = addr / (u64)4096;
     if (page_num < (u64)2048) {
         let byte_idx = (int)(page_num / (u64)8);
-        let bit_idx = (int)(page_num % (u64)8);
+        let bit_idx = (int)(page_num & (u64)7);
         let mask = (u8)(1 << bit_idx);
         if ((bitmap[byte_idx] & mask) != (u8)0) {
             bitmap[byte_idx] = bitmap[byte_idx] & ~mask;
@@ -910,7 +915,7 @@ void serial_write_dec(u64 value) {
     let count = 0;
     let temp = value;
     while (temp > (u64)0) {
-        let rem = temp % (u64)10;
+        let rem = temp - (temp / (u64)10) * (u64)10;
         buf[count] = (char)((u8)'0' + (u8)rem);
         temp = temp / (u64)10;
         count = count + 1;
@@ -931,7 +936,7 @@ void console_fastfetch() {
     let ticks_ptr = (u64*)536584;
     let t = *ticks_ptr;
     let sec = t / (u64)100;
-    let frac = t % (u64)100;
+    let frac = t - (t / (u64)100) * (u64)100;
 
     let used_pages_ptr = (u64*)536576;
     let used = *used_pages_ptr;
@@ -1156,7 +1161,7 @@ void console_uptime() {
     let ticks_ptr = (u64*)536584;
     let t = *ticks_ptr;
     let sec = t / (u64)100;
-    let frac = t % (u64)100;
+    let frac = t - (t / (u64)100) * (u64)100;
     serial_write_str("uptime: ");
     serial_write_dec(sec);
     serial_write_char((u8)'.');
@@ -1251,13 +1256,13 @@ void console_execute(char* line) {
         let j = (u64)0;
         while (j < (u64)10) {
             p_ptr.buf[p_ptr.head] = msg[j];
-            p_ptr.head = (p_ptr.head + (u64)1) % (u64)256;
+            p_ptr.head = (p_ptr.head + (u64)1) & (u64)255;
             j = j + (u64)1;
         }
         serial_write_str("Reading from Pipe: ");
         while (p_ptr.tail != p_ptr.head) {
             serial_write_char((u8)p_ptr.buf[p_ptr.tail]);
-            p_ptr.tail = (p_ptr.tail + (u64)1) % (u64)256;
+            p_ptr.tail = (p_ptr.tail + (u64)1) & (u64)255;
         }
         serial_write_str("\nIPC Pipe test passed.\n");
         return;

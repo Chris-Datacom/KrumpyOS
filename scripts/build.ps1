@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $kRoot = (Resolve-Path (Join-Path $root "..\k")).Path
 $asmFlags = @()
@@ -19,9 +20,21 @@ Require-Command "llvm-objcopy"
 
 New-Item -ItemType Directory -Force (Join-Path $root "target") | Out-Null
 cargo run --manifest-path (Join-Path $kRoot "Cargo.toml") -- compile (Join-Path $root "kernel\kernel.k") (Join-Path $root "target\kernel.s") x86_64-krumpyos
+if ($LASTEXITCODE -ne 0) {
+    throw "K compiler failed; refusing to link stale kernel.s."
+}
 clang --target=x86_64-unknown-elf -c (Join-Path $root "target\kernel.s") -o (Join-Path $root "target\kernel.o")
+if ($LASTEXITCODE -ne 0) {
+    throw "Kernel assembly failed."
+}
 clang --target=x86_64-unknown-elf -c (Join-Path $root "kernel\interrupts.s") -o (Join-Path $root "target\interrupts.o")
+if ($LASTEXITCODE -ne 0) {
+    throw "Interrupt assembly failed."
+}
 ld.lld -m elf_x86_64 -nostdlib -T (Join-Path $root "kernel\linker.ld") -o (Join-Path $root "target\kernel.elf") (Join-Path $root "target\kernel.o") (Join-Path $root "target\interrupts.o")
+if ($LASTEXITCODE -ne 0) {
+    throw "Kernel link failed."
+}
 llvm-objcopy -O binary (Join-Path $root "target\kernel.elf") (Join-Path $root "target\kernel.bin")
 if ((Get-Item (Join-Path $root "target\kernel.bin")).Length -gt 32768) {
     throw "Kernel payload exceeds the 64-sector boot limit."
