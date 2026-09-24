@@ -4,7 +4,8 @@ extern void setup_syscall_msrs();
 
 void kernel_main() {
     setup_serial();
-    klog_info("Serial logging initialized");
+    vga_init();
+    klog_info("Serial and VGA display drivers initialized");
     install_idt();
     klog_info("IDT and exception handlers installed");
     pic_remap();
@@ -162,8 +163,160 @@ void thread_yield() {
     schedule();
 }
 
+void vga_init() {
+    let cursor_ptr = (u64*)532736;
+    let color_ptr = (u64*)532744;
+    let shift_ptr = (u64*)532752;
+    let ansi_ptr = (u64*)532760;
+
+    *cursor_ptr = (u64)0;
+    *color_ptr = (u64)7;
+    *shift_ptr = (u64)0;
+    *ansi_ptr = (u64)0;
+
+    let vga = (u16*)753664;
+    let i = 0;
+    while (i < 2000) {
+        vga[i] = (u16)32 | ((u16)7 << (u16)8);
+        i = i + 1;
+    }
+
+    outb((u16)980, (u8)10);
+    outb((u16)981, (u8)14);
+    outb((u16)980, (u8)11);
+    outb((u16)981, (u8)15);
+}
+
+void vga_scroll() {
+    let vga = (u16*)753664;
+    let color_ptr = (u64*)532744;
+    let color = (u16)(*color_ptr);
+
+    let i = 0;
+    while (i < 1920) {
+        vga[i] = vga[i + 80];
+        i = i + 1;
+    }
+    while (i < 2000) {
+        vga[i] = (u16)32 | (color << (u16)8);
+        i = i + 1;
+    }
+}
+
+void vga_update_hw_cursor(u64 pos) {
+    outb((u16)980, (u8)14);
+    outb((u16)981, (u8)((pos >> (u64)8) & (u64)255));
+    outb((u16)980, (u8)15);
+    outb((u16)981, (u8)(pos & (u64)255));
+}
+
+void vga_write_char(u8 c) {
+    let cursor_ptr = (u64*)532736;
+    let color_ptr = (u64*)532744;
+    let ansi_ptr = (u64*)532760;
+    let pos = *cursor_ptr;
+    let color = (u16)(*color_ptr);
+    let vga = (u16*)753664;
+
+    let ansi = *ansi_ptr;
+    if (ansi == (u64)1) {
+        if (c == (u8)'[') {
+            *ansi_ptr = (u64)2;
+            return;
+        }
+        *ansi_ptr = (u64)0;
+    } else {
+        if (ansi == (u64)2) {
+            if (c == (u8)'m') {
+                *ansi_ptr = (u64)0;
+                return;
+            }
+            if (c == (u8)'H') {
+                *cursor_ptr = (u64)0;
+                vga_update_hw_cursor((u64)0);
+                *ansi_ptr = (u64)0;
+                return;
+            }
+            if (c == (u8)'J') {
+                let i = 0;
+                while (i < 2000) {
+                    vga[i] = (u16)32 | (color << (u16)8);
+                    i = i + 1;
+                }
+                *cursor_ptr = (u64)0;
+                vga_update_hw_cursor((u64)0);
+                *ansi_ptr = (u64)0;
+                return;
+            }
+            if (c == (u8)'0') {
+                *color_ptr = (u64)7;
+            } else {
+                if (c == (u8)'6') {
+                    *color_ptr = (u64)11;
+                } else {
+                    if (c == (u8)'2') {
+                        *color_ptr = (u64)10;
+                    } else {
+                        if (c == (u8)'3') {
+                            *color_ptr = (u64)14;
+                        } else {
+                            if (c == (u8)'4') {
+                                *color_ptr = (u64)9;
+                            } else {
+                                if (c == (u8)'1') {
+                                    *color_ptr = (u64)12;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+    }
+
+    if (c == (u8)27) {
+        *ansi_ptr = (u64)1;
+        return;
+    }
+
+    if (c == (u8)8) {
+        if (pos > (u64)0) {
+            pos = pos - (u64)1;
+            vga[pos] = (u16)32 | (color << (u16)8);
+            *cursor_ptr = pos;
+            vga_update_hw_cursor(pos);
+        }
+        return;
+    }
+
+    if (c == (u8)'\n') {
+        pos = ((pos / (u64)80) + (u64)1) * (u64)80;
+    } else {
+        if (c == (u8)'\r') {
+            pos = (pos / (u64)80) * (u64)80;
+        } else {
+            if (c >= (u8)32) {
+                if (pos < (u64)2000) {
+                    vga[pos] = (u16)c | (color << (u16)8);
+                    pos = pos + (u64)1;
+                }
+            }
+        }
+    }
+
+    if (pos >= (u64)2000) {
+        vga_scroll();
+        pos = (u64)1920;
+    }
+
+    *cursor_ptr = pos;
+    vga_update_hw_cursor(pos);
+}
+
 void serial_write_char(u8 c) {
     outb((u16)1016, c);
+    vga_write_char(c);
 }
 
 void serial_write_str(char* str) {
@@ -174,11 +327,149 @@ void serial_write_str(char* str) {
     }
 }
 
+char ps2_scancode_to_ascii(u8 sc, u64 shift) {
+    if (sc == (u8)28) { return '\n'; }
+    if (sc == (u8)14) { return (char)8; }
+    if (sc == (u8)57) { return ' '; }
+    if (sc == (u8)15) { return '\t'; }
+
+    if (shift == (u64)0) {
+        if (sc == (u8)2) { return '1'; }
+        if (sc == (u8)3) { return '2'; }
+        if (sc == (u8)4) { return '3'; }
+        if (sc == (u8)5) { return '4'; }
+        if (sc == (u8)6) { return '5'; }
+        if (sc == (u8)7) { return '6'; }
+        if (sc == (u8)8) { return '7'; }
+        if (sc == (u8)9) { return '8'; }
+        if (sc == (u8)10) { return '9'; }
+        if (sc == (u8)11) { return '0'; }
+        if (sc == (u8)12) { return '-'; }
+        if (sc == (u8)13) { return '='; }
+
+        if (sc == (u8)16) { return 'q'; }
+        if (sc == (u8)17) { return 'w'; }
+        if (sc == (u8)18) { return 'e'; }
+        if (sc == (u8)19) { return 'r'; }
+        if (sc == (u8)20) { return 't'; }
+        if (sc == (u8)21) { return 'y'; }
+        if (sc == (u8)22) { return 'u'; }
+        if (sc == (u8)23) { return 'i'; }
+        if (sc == (u8)24) { return 'o'; }
+        if (sc == (u8)25) { return 'p'; }
+        if (sc == (u8)26) { return '['; }
+        if (sc == (u8)27) { return ']'; }
+
+        if (sc == (u8)30) { return 'a'; }
+        if (sc == (u8)31) { return 's'; }
+        if (sc == (u8)32) { return 'd'; }
+        if (sc == (u8)33) { return 'f'; }
+        if (sc == (u8)34) { return 'g'; }
+        if (sc == (u8)35) { return 'h'; }
+        if (sc == (u8)36) { return 'j'; }
+        if (sc == (u8)37) { return 'k'; }
+        if (sc == (u8)38) { return 'l'; }
+        if (sc == (u8)39) { return ';'; }
+        if (sc == (u8)40) { return '\''; }
+
+        if (sc == (u8)44) { return 'z'; }
+        if (sc == (u8)45) { return 'x'; }
+        if (sc == (u8)46) { return 'c'; }
+        if (sc == (u8)47) { return 'v'; }
+        if (sc == (u8)48) { return 'b'; }
+        if (sc == (u8)49) { return 'n'; }
+        if (sc == (u8)50) { return 'm'; }
+        if (sc == (u8)51) { return ','; }
+        if (sc == (u8)52) { return '.'; }
+        if (sc == (u8)53) { return '/'; }
+    } else {
+        if (sc == (u8)2) { return '!'; }
+        if (sc == (u8)3) { return '@'; }
+        if (sc == (u8)4) { return '#'; }
+        if (sc == (u8)5) { return '$'; }
+        if (sc == (u8)6) { return '%'; }
+        if (sc == (u8)7) { return '^'; }
+        if (sc == (u8)8) { return '&'; }
+        if (sc == (u8)9) { return '*'; }
+        if (sc == (u8)10) { return '('; }
+        if (sc == (u8)11) { return ')'; }
+        if (sc == (u8)12) { return '_'; }
+        if (sc == (u8)13) { return '+'; }
+
+        if (sc == (u8)16) { return 'Q'; }
+        if (sc == (u8)17) { return 'W'; }
+        if (sc == (u8)18) { return 'E'; }
+        if (sc == (u8)19) { return 'R'; }
+        if (sc == (u8)20) { return 'T'; }
+        if (sc == (u8)21) { return 'Y'; }
+        if (sc == (u8)22) { return 'U'; }
+        if (sc == (u8)23) { return 'I'; }
+        if (sc == (u8)24) { return 'O'; }
+        if (sc == (u8)25) { return 'P'; }
+        if (sc == (u8)26) { return '{'; }
+        if (sc == (u8)27) { return '}'; }
+
+        if (sc == (u8)30) { return 'A'; }
+        if (sc == (u8)31) { return 'S'; }
+        if (sc == (u8)32) { return 'D'; }
+        if (sc == (u8)33) { return 'F'; }
+        if (sc == (u8)34) { return 'G'; }
+        if (sc == (u8)35) { return 'H'; }
+        if (sc == (u8)36) { return 'J'; }
+        if (sc == (u8)37) { return 'K'; }
+        if (sc == (u8)38) { return 'L'; }
+        if (sc == (u8)39) { return ':'; }
+        if (sc == (u8)40) { return '"'; }
+
+        if (sc == (u8)44) { return 'Z'; }
+        if (sc == (u8)45) { return 'X'; }
+        if (sc == (u8)46) { return 'C'; }
+        if (sc == (u8)47) { return 'V'; }
+        if (sc == (u8)48) { return 'B'; }
+        if (sc == (u8)49) { return 'N'; }
+        if (sc == (u8)50) { return 'M'; }
+        if (sc == (u8)51) { return '<'; }
+        if (sc == (u8)52) { return '>'; }
+        if (sc == (u8)53) { return '?'; }
+    }
+    return (char)0;
+}
+
 u8 serial_read_char() {
-    while ((inb((u16)1021) & (u8)1) == (u8)0) {
+    let shift_ptr = (u64*)532752;
+    while (1 == 1) {
+        if ((inb((u16)1021) & (u8)1) != (u8)0) {
+            return inb((u16)1016);
+        }
+
+        if ((inb((u16)100) & (u8)1) != (u8)0) {
+            let sc = inb((u16)96);
+            if (sc == (u8)42) {
+                *shift_ptr = (u64)1;
+            } else {
+                if (sc == (u8)54) {
+                    *shift_ptr = (u64)1;
+                } else {
+                    if (sc == (u8)170) {
+                        *shift_ptr = (u64)0;
+                    } else {
+                        if (sc == (u8)182) {
+                            *shift_ptr = (u64)0;
+                        } else {
+                            if ((sc & (u8)128) == (u8)0) {
+                                let ch = ps2_scancode_to_ascii(sc, *shift_ptr);
+                                if (ch != (char)0) {
+                                    return (u8)ch;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         pause();
     }
-    return inb((u16)1016);
 }
 
 void setup_serial() {
