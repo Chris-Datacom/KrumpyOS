@@ -23,8 +23,8 @@ void kernel_main() {
     sti();
     klog_info("Interrupts enabled");
 
-    serial_write_str("\nKrumpyOS console ready\n");
-    serial_write_str("Type 'help' for commands.\n\n");
+    console_fastfetch();
+    serial_write_str("KrumpyOS console ready. Type 'help' for commands.\n\n");
     console_run();
 }
 
@@ -631,9 +631,137 @@ void serial_write_dec(u64 value) {
     }
 }
 
+void console_color(char* code) {
+    serial_write_char((u8)27);
+    serial_write_str(code);
+}
+
+void console_fastfetch() {
+    let ticks_ptr = (u64*)536584;
+    let t = *ticks_ptr;
+    let sec = t / (u64)100;
+    let frac = t % (u64)100;
+
+    let used_pages_ptr = (u64*)536576;
+    let used = *used_pages_ptr;
+    let total = (u64)2048;
+
+    serial_write_char((u8)'\n');
+
+    // Line 1: Logo line 1 + User/Host
+    console_color("[1;36m");
+    serial_write_str("    __ __       ");
+    console_color("[1;32m");
+    serial_write_str("user");
+    console_color("[0m");
+    serial_write_str("@");
+    console_color("[1;34m");
+    serial_write_str("krumpyos\n");
+
+    // Line 2: Logo line 2 + Underline
+    console_color("[1;36m");
+    serial_write_str("   / //_/       ");
+    console_color("[0m");
+    serial_write_str("---------------------\n");
+
+    // Line 3: Logo line 3 + OS
+    console_color("[1;36m");
+    serial_write_str("  / ,<          ");
+    console_color("[1;33m");
+    serial_write_str("OS:       ");
+    console_color("[0m");
+    serial_write_str("KrumpyOS x86_64\n");
+
+    // Line 4: Logo line 4 + Host
+    console_color("[1;36m");
+    serial_write_str(" / /| |         ");
+    console_color("[1;33m");
+    serial_write_str("Host:     ");
+    console_color("[0m");
+    serial_write_str("QEMU Virtual Machine (x86_64)\n");
+
+    // Line 5: Logo line 5 + Kernel
+    console_color("[1;36m");
+    serial_write_str("/_/ |_|         ");
+    console_color("[1;33m");
+    serial_write_str("Kernel:   ");
+    console_color("[0m");
+    serial_write_str("0.1.0-krumpy (Freestanding K)\n");
+
+    // Line 6: Logo line 6 + Uptime
+    console_color("[1;36m");
+    serial_write_str("  ___  ____     ");
+    console_color("[1;33m");
+    serial_write_str("Uptime:   ");
+    console_color("[0m");
+    serial_write_dec(sec);
+    serial_write_char((u8)'.');
+    if (frac < (u64)10) {
+        serial_write_char((u8)'0');
+    }
+    serial_write_dec(frac);
+    serial_write_str("s (");
+    serial_write_dec(t);
+    serial_write_str(" ticks)\n");
+
+    // Line 7: Logo line 7 + Shell
+    console_color("[1;36m");
+    serial_write_str(" / _ \\/ __/     ");
+    console_color("[1;33m");
+    serial_write_str("Shell:    ");
+    console_color("[0m");
+    serial_write_str("k-sh 0.1.0 (PID 1: kinit)\n");
+
+    // Line 8: Logo line 8 + CPU
+    console_color("[1;36m");
+    serial_write_str("/ // /\\ \\       ");
+    console_color("[1;33m");
+    serial_write_str("CPU:      ");
+    console_color("[0m");
+    serial_write_str("x86-64 Long Mode (8254 PIT @ 100 Hz)\n");
+
+    // Line 9: Logo line 9 + Memory
+    console_color("[1;36m");
+    serial_write_str("\\___/___/       ");
+    console_color("[1;33m");
+    serial_write_str("Memory:   ");
+    console_color("[0m");
+    serial_write_dec(used * (u64)4);
+    serial_write_str(" KB / ");
+    serial_write_dec(total * (u64)4);
+    serial_write_str(" KB (");
+    serial_write_dec(used);
+    serial_write_str("/");
+    serial_write_dec(total);
+    serial_write_str(" pages)\n");
+
+    // Line 10: Threads
+    serial_write_str("                ");
+    console_color("[1;33m");
+    serial_write_str("Threads:  ");
+    console_color("[0m");
+    serial_write_str("2 active (TID 0: idle, TID 1: kinit)\n");
+
+    // Line 11: Color Palette Blocks
+    serial_write_str("                ");
+    console_color("[1;33m");
+    serial_write_str("Palette:  ");
+    console_color("[0m");
+    console_color("[40m   ");
+    console_color("[41m   ");
+    console_color("[42m   ");
+    console_color("[43m   ");
+    console_color("[44m   ");
+    console_color("[45m   ");
+    console_color("[46m   ");
+    console_color("[47m   ");
+    console_color("[0m\n\n");
+}
+
 void console_help() {
     serial_write_str("Commands:\n");
     serial_write_str("  help        show this command list\n");
+    serial_write_str("  fastfetch   display system specs and status banner\n");
     serial_write_str("  echo TEXT   print TEXT\n");
     serial_write_str("  ls          list initial ramdisk files\n");
     serial_write_str("  cat FILE    display ramdisk file contents\n");
@@ -778,6 +906,14 @@ void console_execute(char* line) {
         console_help();
         return;
     }
+    if (string_equal(line, "fastfetch")) {
+        console_fastfetch();
+        return;
+    }
+    if (string_equal(line, "fetch")) {
+        console_fastfetch();
+        return;
+    }
     if (string_equal(line, "ls")) {
         serial_write_str("Ramdisk files:\n");
         let i = (u64)0;
@@ -890,7 +1026,7 @@ void console_erase_char() {
 void console_run() {
     let line = (char*)532480;
     let length = 0;
-    serial_write_str("krumpy> ");
+    serial_write_str("user@krumpyos> ");
 
     while (1 == 1) {
         let input = serial_read_char();
@@ -899,14 +1035,14 @@ void console_run() {
             serial_write_char((u8)'\n');
             console_execute(line);
             length = 0;
-            serial_write_str("krumpy> ");
+            serial_write_str("user@krumpyos> ");
         } else {
             if (input == (u8)10) {
                 line[length] = (char)0;
                 serial_write_char((u8)'\n');
                 console_execute(line);
                 length = 0;
-                serial_write_str("krumpy> ");
+                serial_write_str("user@krumpyos> ");
             } else {
                 if (input == (u8)8) {
                     if (length > 0) {

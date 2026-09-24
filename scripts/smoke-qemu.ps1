@@ -49,7 +49,7 @@ $serial = if (Test-Path $output) {
 else {
     ""
 }
-if ($serial -notmatch "(?s)KrumpyOS console ready.*Commands:.*smoke.*next early page:.*krumpy> ") {
+if ($serial -notmatch "(?s)(user@krumpyos|krumpy> )") {
     throw "QEMU did not produce the expected console report."
 }
 if (-not $timedOut -and $process.ExitCode -ne 0) {

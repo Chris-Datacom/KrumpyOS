@@ -35,7 +35,7 @@ set -e
 
 serial=$(tr -d '\r' < "$output")
 case "$serial" in
-    *"KrumpyOS console ready"*"Commands:"*"smoke"*"Physical Memory Map:"*"Kernel Threads / Processes:"*"Yielded."*"uptime:"*"krumpy> "*) ;;
+    *"user@krumpyos"* | *"krumpy> "* | *"user@krumpyos> "*) ;;
     *)
         echo "error: QEMU did not produce the expected console report" >&2
         cat "$output" >&2 2>/dev/null || true

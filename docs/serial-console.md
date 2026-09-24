@@ -16,7 +16,7 @@ Build and start the image:
 The prompt is:
 
 ```text
-krumpy>
+user@krumpyos>
 ```
 
 Input is echoed. Enter submits a line, Backspace and Delete remove one
@@ -26,7 +26,11 @@ the reserved page beginning at physical address `0x82000`.
 ## Commands
 
 - `help`: list commands
+- `fastfetch`: display fastfetch-style ASCII art banner, system specifications, and color palette
 - `echo TEXT`: print `TEXT`
+- `ls`: list files in the initial in-memory ramdisk
+- `cat FILE`: display contents of a ramdisk file
+- `pipe`: test IPC ring-buffer pipe system call
 - `mem`: display physical memory statistics (total, used, free KB and pages) and frame allocator bitmap state
 - `ps`: list active kernel threads, their execution states (READY, RUNNING, BLOCKED, DEAD), and total CPU ticks run
 - `yield`: cooperatively yield the current thread's time slice to the scheduler
