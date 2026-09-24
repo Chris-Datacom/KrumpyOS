@@ -1,107 +1,74 @@
 # KrumpyOS
 
-KrumpyOS is an experimental operating system being developed alongside the
-K programming language. K is the language and compiler project; KrumpyOS is
-the freestanding system that will consume it and eventually host the
-self-compiled K toolchain.
+KrumpyOS is a freestanding operating system being developed alongside the K
+programming language. The two repositories are intentionally separate: K is the
+language/compiler project, while KrumpyOS is the target system that consumes it
+and eventually hosts its own self-compiled toolchain.
 
-The repositories are intentionally separate so compiler and kernel changes can
-be versioned independently. The long-term product is a self-hosting K system:
-the kernel and system software are written primarily in K, while the K
-compiler runs as an isolated user-space program alongside the shell, editor,
-manual viewer, core utilities, and `kpkg`.
+The current project goal is deliberately narrow and practical:
 
-## Project status
+- keep the x86-64 QEMU boot path stable
+- keep the low-level kernel ABI in K
+- use Rust only as the trusted bootstrap compiler while the K subset matures
+- move more runtime code into K before attempting deeper self-hosting work
 
-KrumpyOS now has an experimental BIOS boot path. The first kernel payload is
-compiled from K, loaded by `kernel/boot.s`, and linked into a raw disk image.
-After entering x86-64 long mode the K kernel initializes COM1, installs a
-minimal IDT, switches to its early page tables, and starts an interactive
-serial recovery console. QEMU is the intended runner.
+## Current status
 
-## Roadmap
+KrumpyOS is in a verified bootable state for the x86-64 BIOS/QEMU path:
 
-The milestones are ordered by dependency. A later milestone should not be
-considered complete if it only works through undocumented compiler behavior.
+- the kernel builds from K
+- the boot image is generated from the raw disk layout
+- the system reaches the serial console and accepts interactive commands
+- the smoke test passes in QEMU
 
-### Phase 0: Define the foundation
+The current active target is x86-64 QEMU. The project is not claiming a full
+ARM or Mac hardware boot path yet.
 
-- [x] Choose the first supported machine and emulator target (x86-64 and
-  QEMU).
-- [x] Document the initial BIOS boot path, long-mode transition, stack
-  contract, and K kernel entry.
-- [ ] Define the first K language version and compatibility policy.
-- [ ] Establish a cross-repository test strategy between K and KrumpyOS.
+## What we are doing now
 
-**Done when:** the boot contract and language version are written down and a
-small example can be used as an integration fixture.
+The next milestone is not a broad rewrite of the whole OS. The next milestone is
+focusing the remaining work on the K-first runtime path:
 
-### Phase 1: Make K suitable for systems work
+- port the remaining early kernel runtime pieces to K
+- keep the firmware/boot boundary in K without reintroducing a temporary C shim
+- validate each low-level ABI feature against the actual K compiler subset
+- push userland bootstrap and runtime helpers toward K
+- only then move to self-hosting milestones
 
-- [x] Introduce fixed-width integer, byte, boolean, pointer, and `void` types.
-- [x] Specify integer overflow, alignment, layout, pointer, and signedness rules.
-- [x] Complete aggregate types and predictable struct layout.
-- [x] Add explicit casts and conversions where the machine representation
-  requires them.
-- [x] Add modules or a reproducible multi-file compilation model.
-- [x] Define the unsafe boundary for raw memory and hardware access.
-- [x] Keep lexer, parser, semantic-analysis, IR, and code-generation tests
-  beside each language feature.
+This keeps the project honest: no speculative full-OS rewrite, only the next
+necessary layer of the system.
 
-**Done when:** a versioned K program can express data structures and helper
-functions without relying on prototype-only syntax or host-runtime behavior.
+## Active milestones
 
-### Phase 2: Add a freestanding K target
+### Completed
 
-- [x] Add a freestanding target profile separate from the Linux/System V
-  bootstrap target (`x86_64-krumpyos`).
-- [x] Define the target calling convention, object format, relocation rules,
-  and symbol visibility.
-- [x] Add volatile reads and writes for memory-mapped devices and port I/O.
-- [x] Add compiler support for `no_std`-style builds with no libc, allocator,
-  garbage collector, or hidden runtime.
-- [x] Produce object files or a well-defined assembly artifact suitable for
-  linking.
-- [x] Add reproducible cross-compilation and binary inspection checks.
+- [x] x86-64 QEMU target defined and validated
+- [x] BIOS boot path and long-mode transition working
+- [x] serial console and early kernel logging working
+- [x] IDT + timer + paging initialization working
+- [x] interactive console booted under QEMU
+- [x] temporary C EFI shim removed in favor of K stub code
 
-**Done when:** K can compile a freestanding program that links without libc
-or a host operating-system syscall interface.
+### In progress
 
-### Phase 3: Boot the first KrumpyOS kernel
+- [ ] port remaining early kernel runtime to K
+- [ ] move userland bootstrap and runtime helpers to K
+- [ ] simplify the kernel/runtime docs to match the active target only
+- [ ] validate the next K runtime layer with the real compiler and boot tests
 
-- [x] Add a boot entry point and linker script.
-- [x] Initialize a known stack and transfer control to a K kernel entry point.
-- [x] Build a bootable image from a clean checkout.
-- [x] Add serial output before adding a graphical console.
-- [x] Run the image in QEMU in automated tests.
-- [x] Document how to build, run, debug, and inspect the image.
+### Future
 
-**Done when:** QEMU boots the image and the kernel produces a deterministic
-boot report from code compiled from K.
+- [ ] self-hosting K toolchain
+- [ ] richer userland and service model
+- [ ] broader KrumpyOS runtime features after the boot path is stable
 
 ## Build and run
-
-The current bootable target is x86-64. The build uses LLVM's native
-cross-target tools, so it works from both ARM64 macOS and Windows without
-WSL:
 
 ```sh
 ./scripts/build.sh
 ./scripts/run-qemu.sh
 ./scripts/smoke-qemu.sh
 ```
-
-On Windows PowerShell, use:
-
-```powershell
-.\scripts\build.ps1
-.\scripts\run-qemu.ps1
-.\scripts\smoke-qemu.ps1
-```
-
-Install LLVM (`clang`, `ld.lld`, and `llvm-objcopy`) and QEMU natively on
-each development machine. The same commands can be run from a terminal or
-the VS Code integrated terminal. Stop QEMU with `Ctrl+C`.
 
 On macOS with Homebrew:
 
@@ -110,138 +77,25 @@ brew install llvm lld qemu
 export PATH="$(brew --prefix llvm)/bin:$(brew --prefix lld)/bin:$PATH"
 ```
 
-Persist the `PATH` line in your shell profile. On Windows, install the LLVM
-Windows package and QEMU, then ensure the directories containing `clang`,
-`ld.lld`, `llvm-objcopy`, and `qemu-system-x86_64` are on `PATH`.
+The smoke test is the project’s current validation target. It boots the image in
+QEMU, sends a few commands over the serial console, and verifies that the kernel
+produces the expected banner and prompt.
 
-The ARM64 compiler backend and ARM64 boot path are not implemented yet; this
-repository does not claim to boot natively on ARM hardware.
+## Current engineering rule
 
-The image uses BIOS disk services, loads a fixed 64-sector kernel payload,
-enters x86-64 long mode, initializes a minimal IDT and early paging, then
-displays a fastfetch-style system banner and starts the `user@krumpyos> ` console on COM1. The current boot path is
-intentionally experimental. It has an early bump page allocator, replacement
-identity page tables, and a minimal IDT, but no verified general memory
-manager, filesystem, general interrupt handling, scheduler, user space, or
-hardware abstraction layer yet.
+Keep all low-level boot and ABI work in K when the compiler supports it.
+Keep Rust only where the language is still too limited for the current target.
+Do not reintroduce host-side C shims unless they are explicitly temporary and
+clearly labeled as such.
 
-The bounded smoke test runs QEMU without a display, sends `help`, `echo smoke`,
-and `mem` over COM1, and verifies their output. QEMU is allowed to time out
-while the console waits for more input; any other exit or missing serial output
-is a failure.
+## Documentation policy
 
-Set `KRUMPYOS_TEST_DIVZERO=1` when building to retain the divide-by-zero test
-path if the kernel entry unexpectedly returns. Normal builds remain in the
-interactive console.
+This repository is intentionally trimmed to the active reality of the project:
 
-### Phase 4: Establish kernel foundations
+- active boot target: x86-64 QEMU
+- active language direction: K-first low-level runtime
+- active compiler path: Rust bootstrap + K runtime compilation
+- stale hardware-specific or historical notes are removed unless they still map
+  to a real target being actively developed
 
-- [x] Add panic and assertion handling.
-- [x] Verify the early page-frame allocator and replacement page tables in
-  QEMU.
-- [x] Add physical memory discovery and replace the bump allocator with a
-  reclaimable frame allocator.
-- [x] Complete interrupt descriptor-table setup and exception reporting.
-- [x] Add a timer.
-- [x] Add polling serial input.
-- [x] Add an interactive serial recovery console.
-- [x] Add a minimal kernel logging interface.
-
-**Done when:** the kernel can report faults, allocate memory, and continue
-running without depending on firmware services or a host OS.
-
-### Phase 5: Scheduling and kernel concurrency
-
-- [x] Introduce separate process and thread abstractions.
-- [x] Add a single-core preemptive round-robin scheduler.
-- [x] Add kernel stacks, context switching, an idle thread, and timer-driven
-  time slices.
-- [x] Add blocking, waking, sleeping, yielding, and synchronization
-  primitives.
-- [x] Validate scheduling with multiple kernel threads before adding user
-  mode.
-
-**Done when:** multiple kernel threads run, block, wake, and survive sustained
-timer preemption without corrupting state.
-
-### Phase 6: User space, permissions, and PID 1
-
-- [x] Define a system-call ABI (`SYS_EXIT`, `SYS_WRITE`, `SYS_READ`, `SYS_YIELD`, `SYS_UPTIME`, `SYS_OPEN`, `SYS_CLOSE`, `SYS_PIPE`).
-- [x] Add isolated address spaces, ring-3 execution, and an executable loader.
-- [x] Implement `spawn`, `exit`, `wait`, thread, handle, IPC pipe, and terminal primitives.
-- [ ] Add UID/GID credentials, groups, file ownership and permissions, plus
-  narrowly scoped capabilities for privileged operations.
-- [x] Add an in-memory ramdisk filesystem.
-- [x] Start `kinit` as PID 1 to supervise services, reap orphaned children,
-  and coordinate multi-user targets.
-- [x] Add declarative service units and boot targets (`minimal`, `multi-user`).
-- [ ] Add a normal user login path; reserve UID 0 for root and avoid requiring
-  root for ordinary applications.
-
-**Done when:** a user program can boot, run, perform basic I/O, and exit
-through documented KrumpyOS interfaces, and PID 1 can supervise it.
-
-See [system architecture](docs/system-architecture.md) for the scheduler,
-process, permissions, and init contracts.
-
-### Phase 7: Self-hosted K userland
-
-- [x] Add the KrumpyOS K runtime and standard library (`libk.k`).
-- [ ] Cross-compile and run the K compiler as an ordinary user-space program.
-- [x] Add a userland shell (`sh.k`), declarative init system (`kinit.k`), and core utilities (`ls.k`, `cat.k`, `kpkg.k`).
-- [ ] Compile a K program inside KrumpyOS and execute the result.
-- [ ] Rebuild the K compiler inside KrumpyOS and pass reproducibility gates.
-
-The compiler belongs in developer and full installations. It is not part of
-the kernel or `kinit`.
-
-### Phase 8: Packages and network distribution
-
-- [x] Define the `kpkg` manifest, package metadata, and repository query model.
-- [ ] Install signed/checksummed precompiled artifacts by default.
-- [ ] Support explicit source installation from an exact Git tag or commit.
-- [ ] Isolate package builds and install transactionally with rollback.
-- [ ] Distinguish trusted core repositories from user-added repositories.
-- [ ] Add networking, TLS, and Git/HTTP transport only after process,
-  filesystem, and permission contracts are stable.
-
-Your Git server will host optional source repositories, package indexes, and
-release artifacts. Git transport does not imply trust; `kpkg` verifies the
-configured repository identity and selected artifact or source revision.
-
-See [userland and packages](docs/userland-and-packages.md).
-
-### Phase 9: Installable releases
-
-- [ ] Produce a bootable ISO containing a live/recovery environment.
-- [ ] Add a TUI installer with guided and manual storage configuration.
-- [ ] Install the bootloader, base system, users, default boot target, and
-  selected package profile transactionally.
-- [ ] Provide `minimal`, `server`, `developer`, and `full`/`desktop` profiles
-  as package groups rather than separate operating-system forks.
-- [ ] Default to a normal administrative user and require an explicit policy
-  choice for direct root login.
-- [ ] Add recovery, installation verification, and interrupted-install
-  handling.
-
-See [installer architecture](docs/installer.md).
-
-## Development principles
-
-- Keep the K language small, explicit, and easy to bootstrap.
-- Prefer specified behavior over accidental behavior inherited from the host.
-- Keep unsafe operations visible and testable.
-- Make every boot milestone reproducible in QEMU before targeting hardware.
-- Treat compiler, ABI, linker, and kernel changes as one integration surface.
-- Keep scheduling in the kernel and service policy in the user-space `kinit`
-  process.
-- Treat downloaded packages and build scripts as untrusted.
-- Build installation profiles from versioned package groups instead of
-  maintaining divergent editions.
-- Do not call a feature stable until it is documented and covered by tests.
-
-## Related project
-
-The K language and compiler are maintained in a separate repository. Keep
-compiler and kernel changes coordinated through the target contract and
-cross-repository integration tests described above.
+See [docs/README.md](docs/README.md) for the current technical reference set.
