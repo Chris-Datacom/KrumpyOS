@@ -9,6 +9,8 @@
 extern void outb(u16 port, u8 value);
 extern u8 inb(u16 port);
 extern void pause();
+extern void write_cr3(u64 value);
+extern void k_panic(char* msg, void* frame);
 
 void runtime_io_wait() {
     outb((u16)128, (u8)0);
@@ -222,4 +224,101 @@ void runtime_pit_init() {
     outb((u16)67, (u8)54);
     outb((u16)64, (u8)(divisor & (u16)255));
     outb((u16)64, (u8)((divisor >> (u16)8) & (u16)255));
+}
+
+void runtime_pmm_init() {
+    let bitmap = (u8*)540672;
+    let used_pages_ptr = (u64*)536576;
+
+    let i = 0;
+    while (i < 32) {
+        bitmap[i] = (u8)255;
+        i = i + 1;
+    }
+    while (i < 256) {
+        bitmap[i] = (u8)0;
+        i = i + 1;
+    }
+    *used_pages_ptr = (u64)256;
+}
+
+u64 runtime_alloc_page() {
+    let bitmap = (u8*)540672;
+    let used_pages_ptr = (u64*)536576;
+
+    let byte_idx = 0;
+    while (byte_idx < 256) {
+        if (bitmap[byte_idx] != (u8)255) {
+            let bit_idx = 0;
+            while (bit_idx < 8) {
+                let mask = (u8)(1 << bit_idx);
+                if ((bitmap[byte_idx] & mask) == (u8)0) {
+                    bitmap[byte_idx] = bitmap[byte_idx] | mask;
+                    *used_pages_ptr = *used_pages_ptr + (u64)1;
+                    let page_num = ((u64)byte_idx * (u64)8) + (u64)bit_idx;
+                    let addr = page_num * (u64)4096;
+
+                    let ptr = (u64*)addr;
+                    let j = 0;
+                    while (j < 512) {
+                        ptr[j] = (u64)0;
+                        j = j + 1;
+                    }
+                    return addr;
+                }
+                bit_idx = bit_idx + 1;
+            }
+        }
+        byte_idx = byte_idx + 1;
+    }
+
+    k_panic("Out of Physical Memory Frames", (void*)0);
+    return (u64)0;
+}
+
+void runtime_free_page(u64 addr) {
+    let bitmap = (u8*)540672;
+    let used_pages_ptr = (u64*)536576;
+
+    let page_num = addr / (u64)4096;
+    if (page_num < (u64)2048) {
+        let byte_idx = (int)(page_num / (u64)8);
+        let bit_idx = (int)(page_num & (u64)7);
+        let mask = (u8)(1 << bit_idx);
+        if ((bitmap[byte_idx] & mask) != (u8)0) {
+            bitmap[byte_idx] = bitmap[byte_idx] & ~mask;
+            if (*used_pages_ptr > (u64)0) {
+                *used_pages_ptr = *used_pages_ptr - (u64)1;
+            }
+        }
+    }
+}
+
+void runtime_setup_kernel_paging() {
+    let pml4 = runtime_alloc_page();
+    let pdpt = runtime_alloc_page();
+    let pd = runtime_alloc_page();
+
+    let pml4_ptr = (u64*)pml4;
+    pml4_ptr[0] = pdpt | (u64)3;
+
+    let pdpt_ptr = (u64*)pdpt;
+    pdpt_ptr[0] = pd | (u64)3;
+
+    let pd_ptr = (u64*)pd;
+    let d = 0;
+    while (d < 4) {
+        let pt = runtime_alloc_page();
+        pd_ptr[d] = pt | (u64)3;
+        let pt_ptr = (u64*)pt;
+        let p = 0;
+        while (p < 512) {
+            let phys_addr = ((u64)d * (u64)2097152) + ((u64)p * (u64)4096);
+            pt_ptr[p] = phys_addr | (u64)3;
+            p = p + 1;
+        }
+        d = d + 1;
+    }
+
+    write_cr3(pml4);
 }
